@@ -9,11 +9,11 @@
 ;;
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
 ;; GNU General Public License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.	 If not, see <http://www.gnu.org/licenses/>.
 
 (require 'cl)
 
@@ -39,10 +39,10 @@
 					(if (numberp (car x))
 						;; this is a (beg . end) inserted text item
 						;; use 'weight' to prioritize the stability of meaningful edits
-						;;    pos     weight
+						;;	  pos	  weight
 						(cons (car x) (- (cdr x) (car x)))
 					  ;; this is a (text . pos) deleted text item
-					  ;;    pos     weight
+					  ;;	pos		weight
 					  (cons (cdr x) (length (car x)))))
 		   ;; above actually preserves the counterintuitive ordering of BUFFER-UNDO-LIST
 		   ;; let's reverse it
@@ -50,13 +50,13 @@
 		   finally return (reverse ret)))
 
 ;; (let ((u (filter-undo-list)))
-;;   (- (apply #'max u) (apply #'min u)))
+;;	 (- (apply #'max u) (apply #'min u)))
 
 ;; (defun variance (L)
-;;   (let* ((mean (/ (apply #'+ L) (length L))))
-;; 	(- (/ (reduce #'(lambda (x y) (+ x (expt y 2))) L)
-;; 		  (length L))
-;; 	   (expt mean 2))))
+;;	 (let* ((mean (/ (apply #'+ L) (length L))))
+;;	(- (/ (reduce #'(lambda (x y) (+ x (expt y 2))) L)
+;;		  (length L))
+;;	   (expt mean 2))))
 
 (defun mean-diff (V)
   "Expected difference between each adjacent value"
@@ -111,12 +111,12 @@
 													(abs (- (car x) pt))))))
 		 (closest-match-idx (elt closest-matches 0))
 		 ;; (dest-history-idx (max 0
-		 ;; 						(min (1- (length history))
-		 ;; 							 (+ delta closest-match-idx))))
+		 ;;							(min (1- (length history))
+		 ;;								 (+ delta closest-match-idx))))
 		 (dest-history-idx (cyclize (+ delta closest-match-idx) history)))
 
 	;; (message "history: from-pos=%s, to-pos=%s, predicted-idx=%s, dest-idx=%s, len(history)=%d, matches=%s"
-	;; 		 pt (elt history dest-history-idx) closest-match-idx dest-history-idx (length history) (append closest-matches nil))
+	;;		 pt (elt history dest-history-idx) closest-match-idx dest-history-idx (length history) (append closest-matches nil))
 
 	;; navigation bar
 	;; shows where you are (in temporal terms of undo history) while scrolling
@@ -135,10 +135,10 @@
 							'face '(:weight 'ultra-light))
 				"]"
 				)))
-				;; ;; fill with empty air to prevent ghosting
-				;; (propertize (loop repeat (- +max-history-items+ (length history)) concat "_")
-				;; 			;; 'invisible t
-				;; 			'face '(:box t))
+	;; ;; fill with empty air to prevent ghosting
+	;; (propertize (loop repeat (- +max-history-items+ (length history)) concat "_")
+	;;			;; 'invisible t
+	;;			'face '(:box t))
 
 	;; actually move the cursor
 	(goto-char (elt history dest-history-idx))))
@@ -154,25 +154,25 @@
 (provide 'longer-jump)
 
 ;; (defun history-back ()
-;;   (interactive)
-;;   (let* ((pt (point))
-;; 		 (found (cl-position pt *history* :test #'(lambda (x y) (<= (abs (- x y)) tolerance))))
-;; 		 (going-to-idx (cond ((equal *history-pos* pt) (1- *history-pos*))
-;; 							 (found (1- found))
-;; 							 (t 0))))
-;; 	(message "history-back: Going to idx: %d; found @ %d; history-pos: %d; %s" going-to-idx (or found -1) *history-pos* *history*)
-;; 	(goto-char (circular-nth going-to-idx *history*))
-;; 	(setq *history-pos* going-to-idx)
-;; 	(setq *history* (history-clusters))))
+;;	 (interactive)
+;;	 (let* ((pt (point))
+;;		 (found (cl-position pt *history* :test #'(lambda (x y) (<= (abs (- x y)) tolerance))))
+;;		 (going-to-idx (cond ((equal *history-pos* pt) (1- *history-pos*))
+;;							 (found (1- found))
+;;							 (t 0))))
+;;	(message "history-back: Going to idx: %d; found @ %d; history-pos: %d; %s" going-to-idx (or found -1) *history-pos* *history*)
+;;	(goto-char (circular-nth going-to-idx *history*))
+;;	(setq *history-pos* going-to-idx)
+;;	(setq *history* (history-clusters))))
 
 ;; (defun history-forward ()
-;;   (interactive)
-;;   (let* ((pt (point))
-;; 		 (found (cl-position pt *history* :test #'(lambda (x y) (<= (abs (- x y)) tolerance))))
-;; 		 (going-to-idx (cond ((equal *history-pos* pt) (1+ *history-pos*))
-;; 							 (found (1+ found))
-;; 							 (t -1))))
-;; 	(message "history-forward: Going to idx: %d; found @ %d; history-pos: %d; %s" going-to-idx (or found -1) *history-pos* *history*)
-;; 	(goto-char (circular-nth going-to-idx *history*))
-;; 	(setq *history-pos* going-to-idx)
-;; 	(setq *history* (history-clusters))))
+;;	 (interactive)
+;;	 (let* ((pt (point))
+;;		 (found (cl-position pt *history* :test #'(lambda (x y) (<= (abs (- x y)) tolerance))))
+;;		 (going-to-idx (cond ((equal *history-pos* pt) (1+ *history-pos*))
+;;							 (found (1+ found))
+;;							 (t -1))))
+;;	(message "history-forward: Going to idx: %d; found @ %d; history-pos: %d; %s" going-to-idx (or found -1) *history-pos* *history*)
+;;	(goto-char (circular-nth going-to-idx *history*))
+;;	(setq *history-pos* going-to-idx)
+;;	(setq *history* (history-clusters))))
