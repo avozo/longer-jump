@@ -88,13 +88,13 @@
            until (< (length u) max-length)
            finally return (cl-map 'vector #'car u)))
 
-(defconst +max-history-items+ 50 ;; magic number
+(defconst +max-history-items+ 70 ;; magic number
   "Upper limit (exclusive) of history items--feel free to change this")
 ;; TODO defcustom-ize
 
 (defun history-clusters ()
-  "Sane default"
-  (make-clusters (filter-undo-list) +max-history-items+))
+  "Sane default for consumption"
+  (cl-remove-duplicates (make-clusters (filter-undo-list) +max-history-items+)))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
@@ -103,20 +103,20 @@
          (pt (point))
          ;; stateless--position in HISTORY is determined from current position
          ;; closest match to current position becomes the reference point for moving
-         (closest-matches (cl-map 'vector #'cdr
-                                  (cl-sort (enumerate history)
-                                           #'<
-                                           :key #'(lambda (x)
-                                                    ;; rank by proximity to this point
-                                                    (abs (- (car x) pt))))))
-         (closest-match-idx (elt closest-matches 0))
+         (closest-matches (cl-sort (enumerate history)
+                                   #'<
+                                   :key #'(lambda (x)
+                                            ;; rank by proximity to this point
+                                            (abs (- (car x) pt)))))
+         (closest-match-idx (cdr (elt closest-matches 0)))
          ;; (dest-history-idx (max 0
          ;;                         (min (1- (length history))
          ;;                              (+ delta closest-match-idx))))
-         (dest-history-idx (cyclize (+ delta closest-match-idx) history)))
+         (dest-history-idx (cyclize (+ delta closest-match-idx) history))
+         )
 
-    ;; (message "history: from-pos=%s, to-pos=%s, predicted-idx=%s, dest-idx=%s, len(history)=%d, matches=%s"
-    ;;       pt (elt history dest-history-idx) closest-match-idx dest-history-idx (length history) (append closest-matches nil))
+    ;; (message "history: predicted-idx=%s, dest-idx=%s, len(h)=%d, matches=%s; %s"
+    ;;       closest-match-idx dest-history-idx (length history) (seq-subseq (append closest-matches nil) 0 5))
 
     ;; navigation bar
     ;; shows where you are (in temporal terms of undo history) while scrolling
@@ -125,16 +125,20 @@
           (enable-recursive-minibuffers nil))
       (message "%s"
                (concat
-                "["
-                (propertize (loop repeat (1+ dest-history-idx) concat "=");; "●")
-                            ;; 'face '(:box t)
-                            'face '(:weight 'bold))
-                ">"
-                (propertize (loop repeat (- (length history) dest-history-idx 1) concat "-");;"○")
-                            ;; 'face '(:box t)
+                (propertize "【"
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
+                (propertize (loop repeat (1+ dest-history-idx) concat "●")
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
+                (propertize (loop repeat (- (length history) dest-history-idx 1) concat "○")
+                            'face '(:family "Monospace")
                             'face '(:weight 'ultra-light))
-                "]"
+                (propertize "】"
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
                 )))
+
     ;; ;; fill with empty air to prevent ghosting
     ;; (propertize (loop repeat (- +max-history-items+ (length history)) concat "_")
     ;;          ;; 'invisible t
@@ -176,3 +180,20 @@
 ;;  (goto-char (circular-nth going-to-idx *history*))
 ;;  (setq *history-pos* going-to-idx)
 ;;  (setq *history* (history-clusters))))
+
+
+;; for solving ties
+
+;; (loop for (pos . idx) across closest-matches
+;;    with first-pos = (car (elt closest-matches 0))
+;;    while (= pos first-pos)
+;;    collect idx into ret
+;;    ;; solve position ties
+;;    finally return (cond ((= 1 (length ret))
+;;                          (first ret))
+;;                         ((> delta 0)
+;;                          (apply #'max ret))
+;;                         ((< delta 0)
+;;                          (apply #'min ret))
+;;                         (t ;; error state but I'll let it slide
+;;                          (first ret))))
