@@ -19,16 +19,13 @@
 
 ;; constants
 
-(defconst +max-history-items+ 25 ;; magic number
+(defconst +max-history-items+ 30 ;; magic number
   "Upper limit (exclusive) of history items--feel free to change this")
 ;; TODO defcustom-ize
 
 (defconst +only-consider-last-n+ 210
-  ;; most-positive-fixnum
-  ;; ^^^^^^^^^^^^^^^^^^^^ use that if you want to consider entire
-  ;; history going back as far as your UNDO-LIMIT is set (I don't
-  ;; recommend)
-  "Maximum (inclusive) recent history items to use")
+  ;; use most-positive-fixnum for all
+  "Maximum number of recent (filtered) history items to use")
 
 ;; utils
 
@@ -62,11 +59,12 @@
 	   (length seq))))
 
 (defun n-highest (seq n)
-  "Get the latter portion of SEQ consisting of up to (exclusive) N items"
-  (subseq seq
-		  (max 0 (- (length seq) n))
-		  (length seq)))
-
+  "Get the latter portion of SEQ consisting of up to len(SEQ)*N items"
+  (subseq seq (- (length seq) n))
+  ;; for doing this by fractions of the length instead:
+  ;; (let ((n (truncate (* n (length seq)))))
+  ;; 	(subseq seq (- (length seq) n))))
+  )
 
 ;; k-means
 
@@ -153,7 +151,10 @@
 		   ;; above actually preserves the counterintuitive ordering of BUFFER-UNDO-LIST
 		   ;; let's reverse it
 		   into ret
-		   finally return (reverse ret)))
+		   finally return (cl-remove-duplicates ;; and remove duplicates
+						   (cl-remove-if ;; and remove positions point out of this buffer
+							#'(lambda (x) (> x (buffer-size)))
+							(reverse ret)))))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
@@ -181,11 +182,17 @@
 			 ;; (dest-history-idx (max 0
 			 ;;							(min (1- (length history))
 			 ;;								 (+ delta closest-match-idx))))
-			 (dest-history-idx (cyclize (+ delta closest-match-idx) history))
+			 (shit nil)
+			 (dest-history-idx (if (or (eq last-command 'history-back)
+									   (eq last-command 'history-forward)
+									   (eq last-command 'history-move))
+								   ;; different behavior for first invocation vs doing it in a row
+								   (progn (setq shit t) (cyclize (+ delta closest-match-idx) history))
+								 (1- (length history))))
 			 )
 
-		;; (message "history: %s"
-		;; 		 history)
+		;; (message "idx=%s, history=%s"
+		;; 		 dest-history-idx history)
 
 		;; navigation bar
 		;; shows where you are (in temporal terms of undo history) while scrolling
