@@ -182,12 +182,11 @@
 			 ;; (dest-history-idx (max 0
 			 ;;							(min (1- (length history))
 			 ;;								 (+ delta closest-match-idx))))
-			 (shit nil)
 			 (dest-history-idx (if (or (eq last-command 'history-back)
 									   (eq last-command 'history-forward)
 									   (eq last-command 'history-move))
 								   ;; different behavior for first invocation vs doing it in a row
-								   (progn (setq shit t) (cyclize (+ delta closest-match-idx) history))
+								   (cyclize (+ delta closest-match-idx) history)
 								 (1- (length history))))
 			 )
 
