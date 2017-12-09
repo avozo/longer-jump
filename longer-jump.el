@@ -23,7 +23,7 @@
   "Upper limit (exclusive) of history items--feel free to change this")
 ;; TODO defcustom-ize
 
-(defconst +only-consider-last-n+ 210
+(defconst +only-consider-last-n+ 200
   ;; use most-positive-fixnum for all
   "Maximum number of recent (filtered) history items to use")
 
@@ -59,8 +59,9 @@
 	   (length seq))))
 
 (defun n-highest (seq n)
-  "Get the latter portion of SEQ consisting of up to len(SEQ)*N items"
-  (subseq seq (- (length seq) n))
+  "Get the latter portion of SEQ consisting of up to min(N, len(SEQ)) items"
+  (subseq seq (if (> (length seq) n)
+				  (- (length seq) n) 0))
   ;; for doing this by fractions of the length instead:
   ;; (let ((n (truncate (* n (length seq)))))
   ;; 	(subseq seq (- (length seq) n))))
@@ -130,7 +131,9 @@
 	(let* ((window-width-total (/ (length data) k))
 		   (window-width-left (/ window-width-total 2))
 		   (window-width-right (- window-width-total window-width-left)))
-	  (cl-loop for idx from 0 below (length data) by window-width-total
+	  (cl-loop for nth-iter from 0
+			   ;; increase stride by NTH-ITER^2
+			   for idx from (1- (length data)) downto 0 by (+ window-width-total (* nth-iter nth-iter))
 			   and window = (seq-subseq data
 										(max 0 (- idx window-width-left))
 										(min (length data) (+ idx window-width-right 1)))
@@ -159,10 +162,15 @@
 (defun history-move (delta)
   "delta > 0 => go forward in time"
   (interactive)
-  (let ((history (cl-remove-duplicates
-				  (fast-make-clusters
-				   (n-highest (filter-undo-list) +only-consider-last-n+)
-				   +max-history-items+))))
+  (let* (;;(available (n-highest (filter-undo-list) +only-consider-last-n+))
+		 (available (filter-undo-list))
+		 (history (cl-remove-duplicates
+				   (fast-make-clusters available +max-history-items+)))
+		 (history ;; ensure last edit position, no matter how irrelevant, sticks
+		  (if (elt available (1- (length available)))
+			  (vconcat history (vector (elt available (1- (length available)))))
+			history))
+		 )
 	(if (<= (length history) 0)
 		(message "No history to go back or forward to! Start editing!")
 	  (let* ((pt (point))
@@ -174,11 +182,13 @@
 			 ;; 									;; rank by proximity to this point
 			 ;; 									(abs (- (car x) pt)))))
 			 ;; less memory usage this way…
-			 (closest-match-idx (cdr
-								 (argmin #'(lambda (history-item)
-											 (abs (- (car history-item) pt)))
-										 (enumerate history))))
-			 ;; in case no more cyclization ;; shit
+			 (closest-match-idx (cl-loop for idx from 0 below (length history)
+										 for closest = 0 then (if (< (abs (- (elt history idx) pt))
+																	 (abs (- (elt history closest) pt)))
+																  idx closest)
+										 finally return closest))
+
+			 ;; In case no more cyclization
 			 ;; (dest-history-idx (max 0
 			 ;;							(min (1- (length history))
 			 ;;								 (+ delta closest-match-idx))))
