@@ -164,13 +164,15 @@
   (interactive)
   (let* (;;(available (n-highest (filter-undo-list) +only-consider-last-n+))
 		 (available (filter-undo-list))
-		 (history (cl-remove-duplicates
-				   (fast-make-clusters available +max-history-items+)))
+		 (history (fast-make-clusters available +max-history-items+))
 		 (history ;; ensure last edit position, no matter how irrelevant, sticks
 		  (if (elt available (1- (length available)))
-			  (vconcat history (vector (elt available (1- (length available)))))
+			  (vconcat history
+					   (vector (elt available (1- (length available)))))
 			history))
+		 (history (cl-remove-duplicates history))
 		 )
+	(message "history=%s" history)
 	(if (<= (length history) 0)
 		(message "No history to go back or forward to! Start editing!")
 	  (let* ((pt (point))
