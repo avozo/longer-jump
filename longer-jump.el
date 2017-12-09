@@ -172,7 +172,6 @@
 			history))
 		 (history (cl-remove-duplicates history))
 		 )
-	(message "history=%s" history)
 	(if (<= (length history) 0)
 		(message "No history to go back or forward to! Start editing!")
 	  (let* ((pt (point))
