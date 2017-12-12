@@ -19,7 +19,7 @@
 
 ;; constants
 
-(defconst +max-history-items+ 30 ;; magic number
+(defconst +max-history-items+ 50 ;; magic number
   "Upper limit (exclusive) of history items--feel free to change this")
 ;; TODO defcustom-ize
 
@@ -132,8 +132,8 @@
 		   (window-width-left (/ window-width-total 2))
 		   (window-width-right (- window-width-total window-width-left)))
 	  (cl-loop for nth-iter from 0
-			   ;; increase stride by NTH-ITER^2
-			   for idx from (1- (length data)) downto 0 by (+ window-width-total (* nth-iter nth-iter))
+			   ;; increase stride by NTH-ITER^(2)
+			   for idx from (1- (length data)) downto 0 by (+ window-width-total (truncate (expt nth-iter 2)))
 			   and window = (seq-subseq data
 										(max 0 (- idx window-width-left))
 										(min (length data) (+ idx window-width-right 1)))
@@ -143,7 +143,9 @@
 						  ;; centroid of this window
 						  (argmin #'(lambda (data-point)
 									  (abs (- data-point avg)))
-								  window)))))))
+								  window)))
+			   into v
+			   finally return (reverse v)))))
 
 (defun filter-undo-list ()
   "Converting the native BUFFER-UNDO-LIST to something usable"
