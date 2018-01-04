@@ -23,6 +23,9 @@
   "Upper limit (exclusive) of history items--feel free to change this")
 ;; TODO defcustom-ize
 
+(defconst +no-closer-than+ 50
+  "Controls maximum proximity of any consecutive edit positions. Earliest edit position (one you're most likely to remember) is used when there are candidates to filter out.")
+
 (defconst +only-consider-last-n+ 200
   ;; use most-positive-fixnum for all
   "Maximum number of recent (filtered) history items to use")
@@ -150,9 +153,11 @@
 (defun filter-undo-list ()
   "Converting the native BUFFER-UNDO-LIST to something usable"
   (cl-loop for x in buffer-undo-list
-		   when (and (consp x) (numberp (car x)))
-		   vconcat (vector
-					(if (numberp (car x)) (car x) (cdr x)))
+		   when (and (consp x) (numberp (cdr x)))
+		   ;; this only uses two types of elements in this list…
+		   ;; insertion: use the end of the range (last place you remember being)
+		   ;; deletion: abs(position)
+		   vconcat (vector (abs (cdr x)))
 		   ;; above actually preserves the counterintuitive ordering of BUFFER-UNDO-LIST
 		   ;; let's reverse it
 		   into ret
@@ -161,47 +166,57 @@
 							#'(lambda (x) (> x (buffer-size)))
 							(reverse ret)))))
 
+(defun filter-undo-list-into-list ()
+  "Converting the native BUFFER-UNDO-LIST to something usable"
+  (cl-loop for x in buffer-undo-list
+		   ;; this only uses two types of elements in this list…
+		   ;; insertion: use the end of the range (last place you remember being)
+		   ;; deletion: abs(position)
+		   when (and (consp x)
+					 (destructuring-bind (a . b) x
+					   (or
+						;; case of inserted text range (beg . end)
+						;; (`end` being what we want)
+						(and (numberp a) (numberp b))
+						;; case of (deleted text . pos)
+						(and (stringp a) (numberp b)))))
+		   collect (abs (cdr x)) into ret
+		   finally return (cl-remove-if ;; and remove positions point out of this buffer
+						   #'(lambda (x) (> x (buffer-size)))
+						   ret)))
+
+(cl-defun condense-undo-list (L &key (no-closer-than +no-closer-than+) (max-count +max-history-items+))
+  (cl-loop for x in L and idx from 0
+		   with cursor-idx = nil
+		   when (and (< (length ret) max-count)
+					 (or (null cursor-idx)
+						 (>= (abs (- (elt L cursor-idx) x))
+							 no-closer-than)))
+		   collect x into ret
+		   do (setq cursor-idx idx)
+		   finally return ret))
+
+(defvar last-pos-idx 0)
+
 (defun history-move (delta)
   "delta > 0 => go forward in time"
   (interactive)
-  (let* (;;(available (n-highest (filter-undo-list) +only-consider-last-n+))
-		 (available (filter-undo-list))
-		 (history (fast-make-clusters available +max-history-items+))
-		 (history ;; ensure last edit position, no matter how irrelevant, sticks
-		  (if (elt available (1- (length available)))
-			  (vconcat history
-					   (vector (elt available (1- (length available)))))
-			history))
-		 (history (cl-remove-duplicates history))
-		 )
-	(if (<= (length history) 0)
-		(message "No history to go back or forward to! Start editing!")
-	  (let* ((pt (point))
-			 ;; stateless--position in HISTORY is determined from current position
-			 ;; closest match to current position becomes the reference point for moving
-			 ;; (closest-matches (cl-sort (enumerate history)
-			 ;; 						   #'<
-			 ;; 						   :key #'(lambda (x)
-			 ;; 									;; rank by proximity to this point
-			 ;; 									(abs (- (car x) pt)))))
-			 ;; less memory usage this way…
-			 (closest-match-idx (cl-loop for idx from 0 below (length history)
-										 for closest = 0 then (if (< (abs (- (elt history idx) pt))
-																	 (abs (- (elt history closest) pt)))
-																  idx closest)
-										 finally return closest))
+  (make-local-variable 'last-pos-idx)
+  (let ((history (condense-undo-list (filter-undo-list-into-list))))
+		 ;;(history (subseq history 0 (min (length history) +max-history-items+)))
+	(if (zerop (length history))
+		(message (format "Nowhere to go %s to. Start editing!"
+						 (if (< delta 0) "back" "forward")))
+	  (let ((dest-history-idx (if (or (eq last-command 'history-back)
+									  (eq last-command 'history-forward)
+									  (eq last-command 'history-move))
+								  ;; different behavior for calling this function consecutively
+								  (cyclize (+ (* -1 delta) last-pos-idx) history)
+								;; 0 is the earliest edit position
+								0)))
 
-			 ;; In case no more cyclization
-			 ;; (dest-history-idx (max 0
-			 ;;							(min (1- (length history))
-			 ;;								 (+ delta closest-match-idx))))
-			 (dest-history-idx (if (or (eq last-command 'history-back)
-									   (eq last-command 'history-forward)
-									   (eq last-command 'history-move))
-								   ;; different behavior for first invocation vs doing it in a row
-								   (cyclize (+ delta closest-match-idx) history)
-								 (1- (length history))))
-			 )
+		;; remember this position in case of a forthcoming consecutive call
+		(setq last-pos-idx dest-history-idx)
 
 		;; (message "idx=%s, history=%s"
 		;; 		 dest-history-idx history)
@@ -216,10 +231,10 @@
 					(propertize "【"
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat (1+ dest-history-idx) concat "●")
+					(propertize (loop repeat (- (length history) dest-history-idx) concat "●")
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat (- (length history) dest-history-idx 1) concat "○")
+					(propertize (loop repeat dest-history-idx concat "○")
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-light))
 					(propertize "】"
@@ -229,6 +244,77 @@
 
 		;; actually move the cursor
 		(goto-char (elt history dest-history-idx))))))
+
+(defun history-move-old (delta)
+  "delta > 0 => go forward in time"
+  (interactive)
+  (let ((available (filter-undo-list)))
+	(if (zerop (length available))
+		(message "No history to go back or forward to")
+	  (let* (;;(available (n-highest (filter-undo-list) +only-consider-last-n+))
+			 (history (fast-make-clusters available +max-history-items+))
+			 (history ;; ensure last edit position, no matter how irrelevant, sticks
+			  (if (elt available (1- (length available)))
+				  (vconcat history
+						   (vector (elt available (1- (length available)))))
+				history))
+			 (history (cl-remove-duplicates history))
+			 )
+		(if (<= (length history) 0)
+			(message "No history to go back or forward to! Start editing!")
+		  (let* ((pt (point))
+				 ;; stateless--position in HISTORY is determined from current position
+				 ;; closest match to current position becomes the reference point for moving
+				 ;; (closest-matches (cl-sort (enumerate history)
+				 ;; 						   #'<
+				 ;; 						   :key #'(lambda (x)
+				 ;; 									;; rank by proximity to this point
+				 ;; 									(abs (- (car x) pt)))))
+				 ;; less memory usage this way…
+				 (closest-match-idx (cl-loop for idx from 0 below (length history)
+											 for closest = 0 then (if (< (abs (- (elt history idx) pt))
+																		 (abs (- (elt history closest) pt)))
+																	  idx closest)
+											 finally return closest))
+
+				 ;; In case no more cyclization
+				 ;; (dest-history-idx (max 0
+				 ;;							(min (1- (length history))
+				 ;;								 (+ delta closest-match-idx))))
+				 (dest-history-idx (if (or (eq last-command 'history-back)
+										   (eq last-command 'history-forward)
+										   (eq last-command 'history-move))
+									   ;; different behavior for first invocation vs doing it in a row
+									   (cyclize (+ delta closest-match-idx) history)
+									 (1- (length history))))
+				 )
+
+			;; (message "idx=%s, history=%s"
+			;; 		 dest-history-idx history)
+
+			;; navigation bar
+			;; shows where you are (in temporal terms of undo history) while scrolling
+			(let ((message-log-max nil)
+				  (minibuffer-message-timeout 0)
+				  (enable-recursive-minibuffers nil))
+			  (message "%s"
+					   (concat
+						(propertize "【"
+									'face '(:family "Monospace")
+									'face '(:weight 'ultra-bold))
+						(propertize (loop repeat (1+ dest-history-idx) concat "●")
+									'face '(:family "Monospace")
+									'face '(:weight 'ultra-bold))
+						(propertize (loop repeat (- (length history) dest-history-idx 1) concat "○")
+									'face '(:family "Monospace")
+									'face '(:weight 'ultra-light))
+						(propertize "】"
+									'face '(:family "Monospace")
+									'face '(:weight 'ultra-bold))
+						)))
+
+			;; actually move the cursor
+			(goto-char (elt history dest-history-idx))))))))
 
 (defun history-forward ()
   (interactive)
