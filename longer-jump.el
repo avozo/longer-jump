@@ -172,7 +172,7 @@
 		   ;; this only uses two types of elements in this list…
 		   ;; insertion: use the end of the range (last place you remember being)
 		   ;; deletion: abs(position)
-		   when (and (consp x)
+  		   when (and (consp x)
 					 (destructuring-bind (a . b) x
 					   (or
 						;; case of inserted text range (beg . end)
@@ -185,6 +185,10 @@
 						   #'(lambda (x) (> x (buffer-size)))
 						   ret)))
 
+(defun get-marker-list ()
+  (cl-remove-duplicates
+   (mapcar #'marker-position mark-ring)))
+
 (cl-defun condense-undo-list (L &key (no-closer-than +no-closer-than+) (max-count +max-history-items+))
   (cl-loop for x in L and idx from 0
 		   with cursor-idx = nil
@@ -196,13 +200,24 @@
 		   do (setq cursor-idx idx)
 		   finally return ret))
 
+(cl-defun merge-with-undo-list (undo-list lst &key (step 3))
+  (cl-loop for x in (rest undo-list) and i from 1
+		   if (zerop (mod i step))
+		   append (list x (pop lst)) into ret
+		   else
+		   append (list x) into ret
+		   finally return ret))
+
 (defvar last-pos-idx 0)
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
   (interactive)
   (make-local-variable 'last-pos-idx)
-  (let ((history (condense-undo-list (filter-undo-list-into-list))))
+  (let ((history (merge-with-undo-list
+				  (condense-undo-list (filter-undo-list-into-list))
+				  ;; TODO adjust MAX-COUNT to account for interleaved marker positions
+				  (get-marker-list))))
 		 ;;(history (subseq history 0 (min (length history) +max-history-items+)))
 	(if (zerop (length history))
 		(message (format "Nowhere to go %s to. Start editing!"
