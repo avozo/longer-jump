@@ -20,7 +20,7 @@ There are no third party dependencies.
 Just put longer-jump.el into your LOAD-PATH; e.g.:
 
 ``bash
-$ curl https://github.com/buysilver/longer-jump/blob/master/longer-jump.el > ~/.emacs.d/lisp/longer-jump.el
+$ curl https://github.com/buysilver/longer-jump/blob/master/hst-mode.el > ~/.emacs.d/lisp/hst-mode.el
 ```
 
 in your ``~/.emacs``:
