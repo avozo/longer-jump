@@ -17,7 +17,7 @@ There are no third party dependencies.
 
 ## Installation
 
-Just put longer-jump.el into your LOAD-PATH; e.g.:
+Just put hst-mode.el into your LOAD-PATH; e.g.:
 
 ```
 $ curl https://github.com/buysilver/longer-jump/blob/master/hst-mode.el > ~/.emacs.d/lisp/hst-mode.el
