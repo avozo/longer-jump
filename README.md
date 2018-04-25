@@ -19,11 +19,12 @@ There are no third party dependencies.
 
 Just put longer-jump.el into your LOAD-PATH; e.g.:
 
-``bash
+``shell
 $ curl https://github.com/buysilver/longer-jump/blob/master/hst-mode.el > ~/.emacs.d/lisp/hst-mode.el
 ```
 
-in your ``~/.emacs``:
+in your `~/.emacs`:
+
 ```lisp
 (add-to-list 'load-path "~/.emacs.d/lisp/")
 (require 'hst-mode)
