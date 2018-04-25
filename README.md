@@ -19,7 +19,7 @@ There are no third party dependencies.
 
 Just put longer-jump.el into your LOAD-PATH; e.g.:
 
-``
+```
 $ curl https://github.com/buysilver/longer-jump/blob/master/hst-mode.el > ~/.emacs.d/lisp/hst-mode.el
 ```
 
