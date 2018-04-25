@@ -26,9 +26,7 @@
 
 (defun cyclize (n seq)
   "Negative or too large index -> correct index. Makes an 'index' valid over (-inf, +inf). This corrects N without actually calling ELT."
-  (cond ((< n 0) (+ (length seq) n))
-		((>= n (length seq)) (mod n (length seq)))
-		(t n)))
+  (mod n (length seq)))
 
 (defun push-into-queue (v x max-len)
   "cons X to list V as a FIFO queue; keeps len(V) <= MAX-LEN"
@@ -39,34 +37,37 @@
 
 ;; logging history
 
-;(make-variable-buffer-local
-(defvar hst-record '())
-;)
+(make-variable-buffer-local
+ (defvar hst-record '())
+)
 
-;(make-variable-buffer-local ;; TODO try this way
-(defvar last-pos-idx 0)
-;)
+(make-variable-buffer-local
+ (defvar last-pos-idx 0)
+)
 
-(cl-defun start-recording-points (target-buffer &optional (max-len 4))
-  (run-at-time "0 sec"
-			   2
-			   (lambda (target-buffer max-len tolerance)
-				 ;(message "current-buffer == this-buffer: %s" (eq (current-buffer) target-buffer))
-				 (when (and (eq (current-buffer) target-buffer)
-							(not (or (eq last-command 'history-back)
-									 (eq last-command 'history-forward)
-									 (eq last-command 'history-move))))
-				   (setq hst-record (push-into-queue hst-record (point) max-len))
-				   (when (and (> (length hst-record) 0)
-							  (< (- (apply #'max hst-record)
-									(apply #'min hst-record))
-								 tolerance)
-							  (or (zerop (length mark-ring))
-								  (> (abs (- (marker-position (first mark-ring))
-											 (first hst-record)))
-									 tolerance)))
-					 (push-mark (first hst-record) t nil))))
-			   target-buffer max-len +no-closer-than+))
+(cl-defun start-recording-points (target-buffer &optional (max-len 5))
+  (run-with-idle-timer
+   1 t
+   #'(lambda (tolerance target-buffer max-len)
+	   (when (and (eq (current-buffer) target-buffer)
+				  (not (or (eq last-command 'history-back)
+						   (eq last-command 'history-forward)
+						   (eq last-command 'history-move))))
+		 (setq hst-record (push-into-queue hst-record (point) max-len))
+		 (when (and (> (length hst-record) 0)
+					(< (- (apply #'max hst-record)
+						  (apply #'min hst-record))
+					   tolerance)
+					(or (zerop (length mark-ring))
+						(cl-every #'(lambda (marker)
+									  (> (abs (- (marker-position marker)
+												 (first hst-record)))
+										 ;; separate consecutive places by much more than the tolerance for detecting a single change
+										 (* 4 tolerance)))
+								  ;; the last 5 positions shouldn't be close to each other
+								  (subseq mark-ring 0 (min (length mark-ring) 5)))))
+		   (push-mark (first hst-record) t nil))))
+   +no-closer-than+ target-buffer max-len))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
@@ -80,7 +81,7 @@
 									  (eq last-command 'hst-forward)
 									  (eq last-command 'history-move))
 								  ;; different behavior for calling this function consecutively
-								  (cyclize (+ (* -1 delta) last-pos-idx) history)
+								  (cyclize (- last-pos-idx delta) history)
 								;; 0 is the earliest edit position
 								0)))
 
@@ -129,12 +130,12 @@
   :keymap (progn
   			(define-key hst-map (kbd "<f9>") 'hst-back)
   			(define-key hst-map (kbd "<f12>") 'hst-forward)
-  			;; (define-key m (kbd "<f6>") #'(lambda ()
-  			;; 							   (cancel-timer hst-timer)))
   			hst-map)
-  (progn (make-local-variable 'last-pos-idx)
-		 (make-local-variable 'hst-record)
-		 (start-recording-points (current-buffer))))
+  (start-recording-points (current-buffer))
+)
+  ;; (progn (make-local-variable 'last-pos-idx)
+  ;; 		 (make-local-variable 'hst-record)
+  ;; 		 ))
 
 (define-globalized-minor-mode global-hst-mode
   hst-mode
