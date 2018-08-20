@@ -45,7 +45,18 @@
  (defvar last-pos-idx 0)
 )
 
-(cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 1))
+(cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 0.5))
+  (run-with-idle-timer
+   secs-delay t
+   #'(lambda (target-buffer)
+	   (when (and (eq (current-buffer) target-buffer)
+				  (not (or (eq last-command 'history-back)
+						   (eq last-command 'history-forward)
+						   (eq last-command 'history-move))))
+		 (push-mark (point) t nil)))
+   target-buffer))
+
+(cl-defun start-recording-points1 (target-buffer &optional (max-len 5) (secs-delay 0.5))
   (run-with-idle-timer
    secs-delay t
    #'(lambda (tolerance target-buffer max-len)
