@@ -63,7 +63,7 @@
 									  (> (abs (- (marker-position marker)
 												 (first hst-record)))
 										 ;; separate consecutive places by much more than the tolerance for detecting a single change
-										 (* 4 tolerance)))
+										 (* 2 tolerance)))
 								  ;; the last 5 positions shouldn't be close to each other
 								  (subseq mark-ring 0 (min (length mark-ring) 5)))))
 		   (push-mark (first hst-record) t nil))))
@@ -96,7 +96,7 @@
 		(let ((message-log-max nil)
 			  (minibuffer-message-timeout 0)
 			  (enable-recursive-minibuffers nil))
-		  (message "Navigation History %s"
+		  (message "In navigation history %s"
 				   (concat
 					(propertize "["
 								'face '(:family "Monospace")
@@ -104,7 +104,7 @@
 					(propertize (loop repeat (- (length history) dest-history-idx) concat "+")
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat dest-history-idx concat "-")
+					(propertize (loop repeat dest-history-idx concat " ")
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-light))
 					(propertize "]"
