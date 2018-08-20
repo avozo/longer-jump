@@ -45,9 +45,9 @@
  (defvar last-pos-idx 0)
 )
 
-(cl-defun start-recording-points (target-buffer &optional (max-len 5))
+(cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 1))
   (run-with-idle-timer
-   1 t
+   secs-delay t
    #'(lambda (tolerance target-buffer max-len)
 	   (when (and (eq (current-buffer) target-buffer)
 				  (not (or (eq last-command 'history-back)
@@ -128,14 +128,11 @@
 (define-minor-mode hst-mode
   :lighter " hist"
   :keymap (progn
-  			(define-key hst-map (kbd "<f9>") 'hst-back)
-  			(define-key hst-map (kbd "<f12>") 'hst-forward)
+  			(define-key hst-map (kbd "C-{") 'hst-back)
+  			(define-key hst-map (kbd "C-}") 'hst-forward)
   			hst-map)
   (start-recording-points (current-buffer))
 )
-  ;; (progn (make-local-variable 'last-pos-idx)
-  ;; 		 (make-local-variable 'hst-record)
-  ;; 		 ))
 
 (define-globalized-minor-mode global-hst-mode
   hst-mode
