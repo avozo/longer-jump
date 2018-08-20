@@ -98,16 +98,16 @@
 			  (enable-recursive-minibuffers nil))
 		  (message "Navigation History %s"
 				   (concat
-					(propertize "【"
+					(propertize "["
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat (- (length history) dest-history-idx) concat "●")
+					(propertize (loop repeat (- (length history) dest-history-idx) concat "+")
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat dest-history-idx concat "○")
+					(propertize (loop repeat dest-history-idx concat "-")
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-light))
-					(propertize "】"
+					(propertize "]"
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
 					)))
