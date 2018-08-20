@@ -38,47 +38,28 @@
 ;; logging history
 
 (make-variable-buffer-local
- (defvar hst-record '())
-)
-
-(make-variable-buffer-local
  (defvar last-pos-idx 0)
 )
 
 (cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 0.5))
   (run-with-idle-timer
    secs-delay t
-   #'(lambda (target-buffer)
-	   (when (and (eq (current-buffer) target-buffer)
-				  (not (or (eq last-command 'history-back)
+   #'(lambda (tolerance target-buffer)
+       (let ((this-point (point)))
+	     (when (and (eq (current-buffer) target-buffer)
+				    (not (or (eq last-command 'history-back)
 						   (eq last-command 'history-forward)
-						   (eq last-command 'history-move))))
-		 (push-mark (point) t nil)))
-   target-buffer))
-
-(cl-defun start-recording-points1 (target-buffer &optional (max-len 5) (secs-delay 0.5))
-  (run-with-idle-timer
-   secs-delay t
-   #'(lambda (tolerance target-buffer max-len)
-	   (when (and (eq (current-buffer) target-buffer)
-				  (not (or (eq last-command 'history-back)
-						   (eq last-command 'history-forward)
-						   (eq last-command 'history-move))))
-		 (setq hst-record (push-into-queue hst-record (point) max-len))
-		 (when (and (> (length hst-record) 0)
-					(< (- (apply #'max hst-record)
-						  (apply #'min hst-record))
-					   tolerance)
-					(or (zerop (length mark-ring))
-						(cl-every #'(lambda (marker)
-									  (> (abs (- (marker-position marker)
-												 (first hst-record)))
-										 ;; separate consecutive places by much more than the tolerance for detecting a single change
-										 (* 2 tolerance)))
-								  ;; the last 5 positions shouldn't be close to each other
-								  (subseq mark-ring 0 (min (length mark-ring) 5)))))
-		   (push-mark (first hst-record) t nil))))
-   +no-closer-than+ target-buffer max-len))
+						   (eq last-command 'history-move)))
+                    ;; make sure this point is not too close to recent points
+                    (cl-every #'(lambda (other-marker)
+                                  (let ((other-point (marker-position other-marker)))
+                                    (>= (abs (- other-point this-point))
+                                        tolerance)))
+                              (subseq mark-ring 0 (min (length mark-ring)
+                                                       5)) ;; how far to check back
+                              ))
+		   (push-mark (point) t nil))))
+   +no-closer-than+ target-buffer))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
