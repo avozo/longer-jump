@@ -89,14 +89,14 @@
 		(setq last-pos-idx dest-history-idx)
 
 		;; (message "idx=%s, history=%s"
-		;;		 dest-history-idx history)
+		;;		 dest-history-idx history) ;; shit test
 
 		;; navigation bar
 		;; shows where you are (in temporal terms of undo history) while scrolling
 		(let ((message-log-max nil)
 			  (minibuffer-message-timeout 0)
 			  (enable-recursive-minibuffers nil))
-		  (message "%s"
+		  (message "Navigation History %s"
 				   (concat
 					(propertize "【"
 								'face '(:family "Monospace")
