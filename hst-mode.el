@@ -1,6 +1,6 @@
 ;; longer-jump.el --- Go back to last relevant cursor position
 ;;
-;; Author: Zelly D. Snyder <zds@zds.ai>
+;; Author: Zelly D. Snyder <zelly@iappp.app>
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -109,19 +109,25 @@
 
 (defun hst-forward ()
   (interactive)
-  (history-move 1))
+  (history-move 1)
+  ;; also move window to middle of screen
+  (recenter-top-bottom)
+  )
 
 (defun hst-back ()
   (interactive)
-  (history-move -1))
+  (history-move -1)
+  ;; also move window to middle of screen
+  (recenter-top-bottom)
+  )
 
 (defvar hst-map (make-sparse-keymap))
 
 (define-minor-mode hst-mode
-  :lighter " hist"
+  :lighter " hst"
   :keymap (progn
-  			(define-key hst-map (kbd "C-{") 'hst-back)
-  			(define-key hst-map (kbd "C-}") 'hst-forward)
+  			;; (define-key hst-map (kbd "C-{") 'hst-back)
+  			;; (define-key hst-map (kbd "C-}") 'hst-forward)
   			hst-map)
   (start-recording-points (current-buffer))
 )
