@@ -47,6 +47,7 @@
    #'(lambda (tolerance target-buffer)
        (let ((this-point (point)))
 	     (when (and (eq (current-buffer) target-buffer)
+                    (not mark-active) ;; make sure we're not interrupting while user is making a transient mark
 				    (not (or (eq last-command 'history-back)
 						   (eq last-command 'history-forward)
 						   (eq last-command 'history-move)))
