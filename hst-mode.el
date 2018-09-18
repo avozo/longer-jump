@@ -22,6 +22,18 @@
 (defconst +no-closer-than+ 70
   "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out.")
 
+(defcustom unvisited-point-character " "
+  "Character to display as an empty space in the navigation progress bar"
+  :type 'string
+  :options '(" " "-")
+  :group 'hst)
+
+(defcustom visited-point-character "+"
+  "Character to display in the navigation/progress bar to represent points preceding the current location's point"
+  :type 'string
+  :options '(" " "+")
+  :group 'hst)
+
 ;; utils
 
 (defun cyclize (n seq)
@@ -94,10 +106,10 @@
 					(propertize "["
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat (- (length history) dest-history-idx) concat "+")
+					(propertize (loop repeat (- (length history) dest-history-idx) concat visited-point-character)
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat dest-history-idx concat " ")
+					(propertize (loop repeat dest-history-idx concat unvisited-point-character)
 								'face '(:family "Monospace")
 								'face '(:weight 'ultra-light))
 					(propertize "]"
