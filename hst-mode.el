@@ -19,8 +19,8 @@
 
 ;; constants
 
-(defconst +no-closer-than+ 80
-  "Controls maximum proximity of any consecutive positions. Earliest position (one you're most likely to remember) is used when there are candidates to filter out.")
+(defconst +no-closer-than+ 70
+  "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out.")
 
 ;; utils
 
@@ -39,7 +39,7 @@
 
 (make-variable-buffer-local
  (defvar last-pos-idx 0)
-)
+ )
 
 (cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 0.5))
   (run-with-idle-timer
@@ -105,20 +105,18 @@
 					)))
 
 		;; actually move the cursor
-		(goto-char (elt history dest-history-idx))))))
+		(goto-char (elt history dest-history-idx))
+        ;; also move window to middle of screen
+        (recenter nil)))))
 
 (defun hst-forward ()
   (interactive)
   (history-move 1)
-  ;; also move window to middle of screen
-  (recenter-top-bottom)
   )
 
 (defun hst-back ()
   (interactive)
   (history-move -1)
-  ;; also move window to middle of screen
-  (recenter-top-bottom)
   )
 
 (defvar hst-map (make-sparse-keymap))
