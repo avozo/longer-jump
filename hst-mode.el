@@ -15,12 +15,19 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.	 If not, see <http://www.gnu.org/licenses/>.
 
-(require 'cl)
+(eval-when-compile (require 'cl))
+
+(defgroup hst nil
+  "Navigate through recent cursor positions in a buffer"
+  :group 'hst)
 
 ;; constants
 
-(defconst +no-closer-than+ 70
-  "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out.")
+(defcustom no-closer-than 70
+  "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out."
+  :type 'number
+  :options '(70 80 150)
+  :group 'hst)
 
 (defcustom unvisited-point-character " "
   "Character to display as an empty space in the navigation progress bar"
@@ -72,7 +79,7 @@
                                                        5)) ;; how far to check back
                               ))
 		   (push-mark (point) t nil))))
-   +no-closer-than+ target-buffer))
+   no-closer-than target-buffer))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
