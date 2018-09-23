@@ -60,25 +60,46 @@
  (defvar last-pos-idx 0)
  )
 
-(cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 0.5))
+(cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 0.5) (n-recent-points 5))
   (run-with-idle-timer
    secs-delay t
    #'(lambda (tolerance target-buffer)
        (let ((this-point (point)))
-	     (when (and (eq (current-buffer) target-buffer)
-                    (not mark-active) ;; make sure we're not interrupting while user is making a transient mark
-				    (not (or (eq last-command 'history-back)
-						   (eq last-command 'history-forward)
-						   (eq last-command 'history-move)))
-                    ;; make sure this point is not too close to recent points
-                    (cl-every #'(lambda (other-marker)
+         (cond ((mark-active)
+                ;; make sure we're not interrupting while user is making a transient mark
+                nil)
+               ;; don't record points while stepping over history
+               ((not (or (eq last-command 'history-back)
+						     (eq last-command 'history-forward)
+						     (eq last-command 'history-move)))
+                nil)
+               ;; when this point is too close to N-RECENT-POINTS, get rid of the previous points and only keep this point because it's more memorable and representative of this place you were at last
+               ((cl-every #'(lambda (other-marker)
                                   (let ((other-point (marker-position other-marker)))
                                     (>= (abs (- other-point this-point))
                                         tolerance)))
                               (subseq mark-ring 0 (min (length mark-ring)
-                                                       5)) ;; how far to check back
-                              ))
-		   (push-mark (point) t nil))))
+                                                       n-recent-points)) ;; how far to check back
+                              )
+                (progn (setq mark-ring (nthcdr n-recent-points mark-ring))
+                       (push-mark (point) t nil)))
+               ;; otherwise straight up add the point to the mark ring
+               (t (push-mark (point) t nil)))
+	     ;; (when (and (eq (current-buffer) target-buffer) ;; necessary?
+         ;;            (not mark-active) ;; make sure we're not interrupting while user is making a transient mark
+		 ;;    	    (not (or (eq last-command 'history-back)
+		 ;;    			     (eq last-command 'history-forward)
+		 ;;    			     (eq last-command 'history-move)))
+         ;;            ;; make sure this point is not too close to recent points
+         ;;            (cl-every #'(lambda (other-marker)
+         ;;                          (let ((other-point (marker-position other-marker)))
+         ;;                            (>= (abs (- other-point this-point))
+         ;;                                tolerance)))
+         ;;                      (subseq mark-ring 0 (min (length mark-ring)
+         ;;                                               5)) ;; how far to check back
+         ;;                      ))
+		 ;;   (push-mark (point) t nil))
+         ))
    no-closer-than target-buffer))
 
 (defun history-move (delta)
