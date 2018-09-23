@@ -1,6 +1,6 @@
 ;; longer-jump.el --- Go back to last relevant cursor position
 ;;
-;; Author: Zelly D. Snyder <zelly@iappp.app>
+;; Author: Zelly Snyder <zelly@iappp.app>
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -60,31 +60,31 @@
  (defvar last-pos-idx 0)
  )
 
-(cl-defun start-recording-points (target-buffer &optional (max-len 5) (secs-delay 0.5) (n-recent-points 5))
+(cl-defun start-recording-points (target-buffer &optional (secs-delay 0.5) (n-recent-points 5))
   (run-with-idle-timer
    secs-delay t
-   #'(lambda (tolerance target-buffer)
+   #'(lambda (tolerance target-buffer n-recent-points)
        (let ((this-point (point)))
          (cond (mark-active
                 ;; make sure we're not interrupting while user is making a transient mark
                 nil)
                ;; don't record points while stepping over history
-               ((not (or (eq last-command 'history-back)
+               ((or (eq last-command 'history-back)
 						     (eq last-command 'history-forward)
-						     (eq last-command 'history-move)))
+						     (eq last-command 'history-move))
                 nil)
-               ;; when this point is too close to N-RECENT-POINTS, get rid of the previous points and only keep this point because it's more memorable and representative of this place you were at last
+               ;; when this point is too close to N-RECENT-POINTS, get rid of those recent points replace with this point because it's more memorable and representative of this "place" the user was at last
                ((cl-every #'(lambda (other-marker)
                                   (let ((other-point (marker-position other-marker)))
-                                    (>= (abs (- other-point this-point))
-                                        tolerance)))
+                                    (< (abs (- other-point this-point))
+                                       tolerance)))
                               (subseq mark-ring 0 (min (length mark-ring)
                                                        n-recent-points)) ;; how far to check back
                               )
                 (progn (setq mark-ring (nthcdr n-recent-points mark-ring))
-                       (push-mark (point) t nil)))
+                       (push-mark this-point t nil)))
                ;; otherwise straight up add the point to the mark ring
-               (t (push-mark (point) t nil)))
+               (t (push-mark this-point t nil)))
 	     ;; (when (and (eq (current-buffer) target-buffer) ;; necessary?
          ;;            (not mark-active) ;; make sure we're not interrupting while user is making a transient mark
 		 ;;    	    (not (or (eq last-command 'history-back)
@@ -100,7 +100,7 @@
          ;;                      ))
 		 ;;   (push-mark (point) t nil))
          ))
-   no-closer-than target-buffer))
+   no-closer-than target-buffer n-recent-points))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
