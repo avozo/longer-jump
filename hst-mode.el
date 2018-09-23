@@ -65,7 +65,7 @@
    secs-delay t
    #'(lambda (tolerance target-buffer)
        (let ((this-point (point)))
-         (cond ((mark-active)
+         (cond (mark-active
                 ;; make sure we're not interrupting while user is making a transient mark
                 nil)
                ;; don't record points while stepping over history
