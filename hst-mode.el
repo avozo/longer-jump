@@ -23,10 +23,10 @@
 
 ;; constants
 
-(defcustom no-closer-than 70
+(defcustom no-closer-than 320
   "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out."
   :type 'number
-  :options '(70 80 150)
+  :options '(70 80 150 320 400)
   :group 'hst)
 
 (defcustom unvisited-point-character " "
@@ -60,7 +60,7 @@
  (defvar last-pos-idx 0)
  )
 
-(cl-defun start-recording-points (target-buffer &optional (secs-delay 0.5) (n-recent-points 5))
+(cl-defun start-recording-points (target-buffer &optional (secs-delay 1.0) (n-recent-points 5))
   (run-with-idle-timer
    secs-delay t
    #'(lambda (tolerance target-buffer n-recent-points)
