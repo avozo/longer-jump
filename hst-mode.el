@@ -69,9 +69,9 @@
                 ;; make sure we're not interrupting while user is making a transient mark
                 nil)
                ;; don't record points while stepping over history
-               ((or (eq last-command 'history-back)
-						     (eq last-command 'history-forward)
-						     (eq last-command 'history-move))
+               ((or (eq last-command 'hst-back)
+					(eq last-command 'hst-forward)
+					(eq last-command 'history-move))
                 nil)
                ;; when this point is too close to N-RECENT-POINTS, get rid of those recent points replace with this point because it's more memorable and representative of this "place" the user was at last
                ((cl-every #'(lambda (other-marker)
