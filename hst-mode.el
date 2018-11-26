@@ -73,33 +73,13 @@
 					(eq last-command 'hst-forward)
 					(eq last-command 'history-move))
                 nil)
-               ;; when this point is too close to N-RECENT-POINTS, get rid of those recent points replace with this point because it's more memorable and representative of this "place" the user was at last
-               ((cl-every #'(lambda (other-marker)
-                                  (let ((other-point (marker-position other-marker)))
-                                    (< (abs (- other-point this-point))
-                                       tolerance)))
-                              (subseq mark-ring 0 (min (length mark-ring)
-                                                       n-recent-points)) ;; how far to check back
-                              )
-                (progn (setq mark-ring (nthcdr n-recent-points mark-ring))
-                       (push-mark this-point t nil)))
-               ;; otherwise straight up add the point to the mark ring
-               (t (push-mark this-point t nil)))
-	     ;; (when (and (eq (current-buffer) target-buffer) ;; necessary?
-         ;;            (not mark-active) ;; make sure we're not interrupting while user is making a transient mark
-		 ;;    	    (not (or (eq last-command 'history-back)
-		 ;;    			     (eq last-command 'history-forward)
-		 ;;    			     (eq last-command 'history-move)))
-         ;;            ;; make sure this point is not too close to recent points
-         ;;            (cl-every #'(lambda (other-marker)
-         ;;                          (let ((other-point (marker-position other-marker)))
-         ;;                            (>= (abs (- other-point this-point))
-         ;;                                tolerance)))
-         ;;                      (subseq mark-ring 0 (min (length mark-ring)
-         ;;                                               5)) ;; how far to check back
-         ;;                      ))
-		 ;;   (push-mark (point) t nil))
-         ))
+               ;; don't record the same point again
+               ((= (marker-position (elt mark-ring 0)) this-point) nil)
+               ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
+               ((>= (abs (- this-point
+                            (marker-position (elt mark-ring (min (length mark-ring) n-recent-points)))))
+                    tolerance)
+                (push-mark this-point t nil)))))
    no-closer-than target-buffer n-recent-points))
 
 (defun history-move (delta)
