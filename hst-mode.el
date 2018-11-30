@@ -126,7 +126,9 @@
 					)))
 
 		;; actually move the cursor
-		(goto-char (elt history dest-history-idx))
+		(let ((destination-char (elt history dest-history-idx)))
+          (goto-char destination-char)
+          (pulse-momentary-highlight-one-line destination-char))
         ;; also move window to middle of screen
         (recenter nil)))))
 
