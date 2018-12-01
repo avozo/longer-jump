@@ -41,6 +41,14 @@
   :options '(" " "+")
   :group 'hst)
 
+(defcustom n-locations-in-history-before-repeat 10
+  "Number of most recent history locations to ensure are far away from the current point so as to prevent clumping of history locations.")
+
+(defcustom interval-in-seconds-to-find-new-locations 0.85
+  "How many idle seconds to wait before inspecting the buffer to calculate new locations")
+
+(defvar hst-mode--in-recursive-edit nil)
+
 ;; utils
 
 (defun cyclize (n seq)
@@ -60,31 +68,34 @@
  (defvar last-pos-idx 0)
  )
 
-(cl-defun start-recording-points (target-buffer &optional (secs-delay 0.6) (n-recent-points 5))
+(defun currently-stepping-over-locations-p ()
+  (or hst-mode
+      (eq last-command 'history-back)
+	  (eq last-command 'hitory-forward)
+	  (eq last-command 'history-move)))
+
+(cl-defun start-recording-points (target-buffer)
   (run-with-idle-timer
-   secs-delay t
-   #'(lambda (tolerance target-buffer n-recent-points)
+   interval-in-seconds-to-find-new-locations t
+   #'(lambda (tolerance target-buffer)
        (let ((this-point (point)))
          (cond (mark-active
                 ;; make sure we're not interrupting while user is making a transient mark
                 nil)
                ;; don't record points while stepping over history
-               ((or (eq last-command 'hst-back)
-					(eq last-command 'hst-forward)
-					(eq last-command 'history-move))
-                nil)
+               ((currently-stepping-over-locations-p) nil)
                ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
                ((zerop (length mark-ring))
                 (push-mark this-point t nil))
-               ;; don't record the same point again
+               ;qqqq; don't record the same point again
                ((= (marker-position (elt mark-ring 0)) this-point)
                 nil)
                ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
                ((>= (abs (- this-point
-                            (marker-position (elt mark-ring (min (1- (length mark-ring)) n-recent-points)))))
+                            (marker-position (elt mark-ring (min (1- (length mark-ring)) n-locations-in-history-before-repeat)))))
                     tolerance)
                 (push-mark this-point t nil)))))
-   no-closer-than target-buffer n-recent-points))
+   no-closer-than target-buffer))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
@@ -94,9 +105,7 @@
 	(if (zerop (length history))
 		(message (format "Nowhere to go %s to. Start editing!"
 						 (if (< delta 0) "back" "forward")))
-	  (let ((dest-history-idx (if (or (eq last-command 'hst-back)
-									  (eq last-command 'hst-forward)
-									  (eq last-command 'history-move))
+	  (let ((dest-history-idx (if (currently-stepping-over-locations-p)
 								  ;; different behavior for calling this function consecutively
 								  (cyclize (- last-pos-idx delta) history)
 								;; 0 is the earliest edit position
@@ -132,34 +141,45 @@
 		;; actually move the cursor
 		(let ((destination-char (elt history dest-history-idx)))
           (goto-char destination-char)
+          ;; show a visual effect--highlight the line as a momentary flash
           (pulse-momentary-highlight-one-line destination-char))
         ;; also move window to middle of screen
-        (recenter nil)))))
+        (recenter nil))))
+  )
 
-(defun hst-forward ()
+(defun history-forward ()
   (interactive)
   (history-move 1)
   )
 
-(defun hst-back ()
+(defun history-back ()
   (interactive)
   (history-move -1)
   )
 
-(defvar hst-map (make-sparse-keymap))
+(defun hst-mode--cancel ()
+  (interactive)
+  (hst-mode -1)
+  )
 
-(define-minor-mode hst-mode
+(defvar hst-mode-map
+  (let ((m (make-sparse-keymap)))
+    (define-key m [prior] #'history-back)
+    (define-key m [next] #'history-forward)
+    m))
+
+(define-minor-mode hst-mode "hst-mode" t
   :lighter " hst"
-  :keymap (progn
-  			;; (define-key hst-map (kbd "C-{") 'hst-back)
-  			;; (define-key hst-map (kbd "C-}") 'hst-forward)
-  			hst-map)
+  :keymap hst-mode-map
+  )
+
+(global-set-key (kbd "s-\\") #'(lambda ()
+                                 (interactive)
+                                 (hst-mode)))
+
+(define-minor-mode hst-minor-mode "hst-mode" t
+  :lighter "hst"
   (start-recording-points (current-buffer))
-)
+  )
 
-(define-globalized-minor-mode global-hst-mode
-  hst-mode
-  (lambda ()
-	(hst-mode t)))
-
-(provide 'hst-mode)
+(provide 'hst-minor-mode)
