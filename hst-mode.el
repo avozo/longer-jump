@@ -1,6 +1,6 @@
 ;; longer-jump.el --- Go back to last relevant cursor position
 ;;
-;; Author: Zelly Snyder <zelly@iappp.app>
+;; Author: Zelly Snyder <zelly@outlook.com>
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 
 ;; constants
 
-(defcustom no-closer-than 320
+(defcustom no-closer-than 160
   "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out."
   :type 'number
   :options '(70 80 150 320 400)
@@ -60,7 +60,7 @@
  (defvar last-pos-idx 0)
  )
 
-(cl-defun start-recording-points (target-buffer &optional (secs-delay 1.0) (n-recent-points 5))
+(cl-defun start-recording-points (target-buffer &optional (secs-delay 0.6) (n-recent-points 5))
   (run-with-idle-timer
    secs-delay t
    #'(lambda (tolerance target-buffer n-recent-points)
@@ -73,11 +73,15 @@
 					(eq last-command 'hst-forward)
 					(eq last-command 'history-move))
                 nil)
+               ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
+               ((zerop (length mark-ring))
+                (push-mark this-point t nil))
                ;; don't record the same point again
-               ((= (marker-position (elt mark-ring 0)) this-point) nil)
+               ((= (marker-position (elt mark-ring 0)) this-point)
+                nil)
                ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
                ((>= (abs (- this-point
-                            (marker-position (elt mark-ring (min (length mark-ring) n-recent-points)))))
+                            (marker-position (elt mark-ring (min (1- (length mark-ring)) n-recent-points)))))
                     tolerance)
                 (push-mark this-point t nil)))))
    no-closer-than target-buffer n-recent-points))
