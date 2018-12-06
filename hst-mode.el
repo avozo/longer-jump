@@ -23,7 +23,7 @@
 
 ;; constants
 
-(defcustom no-closer-than 160
+(defcustom no-closer-than 120
   "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out."
   :type 'number
   :options '(70 80 150 320 400)
@@ -41,10 +41,10 @@
   :options '(" " "+")
   :group 'hst)
 
-(defcustom n-locations-in-history-before-repeat 10
+(defcustom n-locations-in-history-before-repeat 3
   "Number of most recent history locations to ensure are far away from the current point so as to prevent clumping of history locations.")
 
-(defcustom interval-in-seconds-to-find-new-locations 0.85
+(defcustom interval-in-seconds-to-find-new-locations 0.5
   "How many idle seconds to wait before inspecting the buffer to calculate new locations")
 
 (defvar hst-mode--in-recursive-edit nil)
