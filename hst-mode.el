@@ -1,19 +1,24 @@
-;; longer-jump.el --- Go back to last relevant cursor position
-;;
-;; Author: Zelly Snyder <zelly@outlook.com>
-;;
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with this program.	 If not, see <http://www.gnu.org/licenses/>.
+;;; package --- Summary:
+;;; longer-jump.el --- Go back to last relevant cursor position
+;;; 
+;;; Author: Zelly Snyder <zelly@outlook.com>
+;;; 
+;;; Commentary:
+;;; 
+;;; This program is free software: you can redistribute it and/or modify
+;;; it under the terms of the GNU General Public License as published by
+;;; the Free Software Foundation, either version 3 of the License, or
+;;; (at your option) any later version.
+;;; 
+;;; This program is distributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
+;;; GNU General Public License for more details.
+;;; 
+;;; You should have received a copy of the GNU General Public License
+;;; along with this program.	 If not, see <http://www.gnu.org/licenses/>.
+
+;;; Code:
 
 (eval-when-compile (require 'cl))
 
@@ -23,13 +28,7 @@
 
 ;; constants
 
-(defcustom no-closer-than 160
-  "Controls maximum proximity of any consecutive positions. Earlier position (one you're most likely to remember) is used when there are candidates to filter out."
-  :type 'number
-  :options '(70 80 150 320 400)
-  :group 'hst)
-
-(defcustom unvisited-point-character " "
+(defcustom unvisited-point-character "-"
   "Character to display as an empty space in the navigation progress bar"
   :type 'string
   :options '(" " "-")
@@ -41,13 +40,12 @@
   :options '(" " "+")
   :group 'hst)
 
-(defcustom n-locations-in-history-before-repeat 10
+(defvar hst-mode--n-locations-in-history-before-repeat
+  (/ mark-ring-max 4)
   "Number of most recent history locations to ensure are far away from the current point so as to prevent clumping of history locations.")
 
-(defcustom interval-in-seconds-to-find-new-locations 0.85
+(defcustom interval-in-seconds-to-find-new-locations 1.0
   "How many idle seconds to wait before inspecting the buffer to calculate new locations")
-
-(defvar hst-mode--in-recursive-edit nil)
 
 ;; utils
 
@@ -69,33 +67,45 @@
  )
 
 (defun currently-stepping-over-locations-p ()
-  (or hst-mode
-      (eq last-command 'history-back)
-	  (eq last-command 'hitory-forward)
-	  (eq last-command 'history-move)))
+  (or (eq last-command #'history-back)
+	  (eq last-command #'history-forward)
+	  (eq last-command #'history-move)))
+
+(make-variable-buffer-local
+ (defvar hst-mode--timer))
 
 (cl-defun start-recording-points (target-buffer)
-  (run-with-idle-timer
-   interval-in-seconds-to-find-new-locations t
-   #'(lambda (tolerance target-buffer)
-       (let ((this-point (point)))
-         (cond (mark-active
-                ;; make sure we're not interrupting while user is making a transient mark
-                nil)
-               ;; don't record points while stepping over history
-               ((currently-stepping-over-locations-p) nil)
-               ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
-               ((zerop (length mark-ring))
-                (push-mark this-point t nil))
-               ;qqqq; don't record the same point again
-               ((= (marker-position (elt mark-ring 0)) this-point)
-                nil)
-               ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
-               ((>= (abs (- this-point
-                            (marker-position (elt mark-ring (min (1- (length mark-ring)) n-locations-in-history-before-repeat)))))
-                    tolerance)
-                (push-mark this-point t nil)))))
-   no-closer-than target-buffer))
+  (if (and (null hst-mode) (timerp hst-mode--timer))
+      ;; Discard this timer if HST-MODE is disabled
+      (cancel-timer hst-mode--timer)
+    (setq hst-mode--timer
+          (run-with-idle-timer
+           interval-in-seconds-to-find-new-locations t
+           #'(lambda (tolerance target-buffer)
+               (let ((this-point (point)))
+                 (cond (mark-active
+                        ;; make sure we're not interrupting while user is making a transient mark
+                        nil)
+                       ;; don't record points while stepping over history
+                       ((currently-stepping-over-locations-p) nil)
+                       ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
+                       ((zerop (length mark-ring))
+                        (push-mark this-point t nil))
+                                        ;qqqq; don't record the same point again
+                       ((= (marker-position (elt mark-ring 0)) this-point)
+                        nil)
+                       ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
+                       ((>= (abs (- this-point
+                                    (marker-position (elt mark-ring (min (1- (length mark-ring)) hst-mode--n-locations-in-history-before-repeat)))))
+                            tolerance)
+                        (push-mark this-point t nil)))))
+           
+           ;; Dynamically sets the tolerance proportional to the number of places in MARK-RING over the total number of points in the buffer.
+           ;; TOLERANCE is how close two /recent/ history locations can be to each other, measured in points.
+           (/ mark-ring-max
+              (point-max))
+           
+           target-buffer))))
 
 (defun history-move (delta)
   "delta > 0 => go forward in time"
@@ -157,29 +167,28 @@
   (history-move -1)
   )
 
-(defun hst-mode--cancel ()
-  (interactive)
-  (hst-mode -1)
-  )
+;; (defvar hst-mode-map
+;;   (let ((m (make-sparse-keymap)))
+;;     (define-key m [prior] #'history-back)
+;;     (define-key m [next] #'history-forward)
+;;     (global-set-key (kbd "s-\\") #'(lambda ()
+;;                                      (interactive)
+;;                                      (hst-mode -1))))
+;;     m)
 
 (defvar hst-mode-map
   (let ((m (make-sparse-keymap)))
-    (define-key m [prior] #'history-back)
-    (define-key m [next] #'history-forward)
+    (define-key m (kbd "s-[") #'history-back)
+    (define-key m (kbd "s-]") #'history-forward)
     m))
 
+;;;###autoload
 (define-minor-mode hst-mode "hst-mode" t
-  :lighter " hst"
+  :lighter "hst "
   :keymap hst-mode-map
-  )
-
-(global-set-key (kbd "s-\\") #'(lambda ()
-                                 (interactive)
-                                 (hst-mode)))
-
-(define-minor-mode hst-minor-mode "hst-mode" t
-  :lighter "hst"
+  :group 'hst
   (start-recording-points (current-buffer))
   )
 
-(provide 'hst-minor-mode)
+(provide 'hst-mode)
+;;; hst-mode.el ends here
