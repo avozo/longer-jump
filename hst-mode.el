@@ -44,6 +44,9 @@
   (/ mark-ring-max 4)
   "Number of most recent history locations to ensure are far away from the current point so as to prevent clumping of history locations.")
 
+(defcustom hst-mode--hard-minimum-distance-to-nth-previous-location 40
+  "Absolute minimum distance that must separate a new candidate history location from the Nth previous location, as defined by HST-MODE--N-LOCATIONS-IN-HISTORY-BEFORE-REPEAT")
+
 (defcustom interval-in-seconds-to-find-new-locations 1.0
   "How many idle seconds to wait before inspecting the buffer to calculate new locations")
 
@@ -82,23 +85,24 @@
           (run-with-idle-timer
            interval-in-seconds-to-find-new-locations t
            #'(lambda (tolerance target-buffer)
-               (let ((this-point (point)))
-                 (cond (mark-active
+               (unless (or
                         ;; make sure we're not interrupting while user is making a transient mark
-                        nil)
-                       ;; don't record points while stepping over history
-                       ((currently-stepping-over-locations-p) nil)
-                       ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
-                       ((zerop (length mark-ring))
-                        (push-mark this-point t nil))
-                                        ;qqqq; don't record the same point again
-                       ((= (marker-position (elt mark-ring 0)) this-point)
-                        nil)
-                       ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
-                       ((>= (abs (- this-point
-                                    (marker-position (elt mark-ring (min (1- (length mark-ring)) hst-mode--n-locations-in-history-before-repeat)))))
-                            tolerance)
-                        (push-mark this-point t nil)))))
+                        mark-active
+                        ;; don't record points while stepping over history
+                        (currently-stepping-over-locations-p))
+                 (let ((this-point (point)))
+                   (cond
+                    
+                    ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
+                    ((zerop (length mark-ring))
+                     (push-mark this-point t nil))
+                    
+                    ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
+                    ((let ((distance (abs (- this-point
+                                             (marker-position (elt mark-ring (min (1- (length mark-ring)) hst-mode--n-locations-in-history-before-repeat)))))))
+                       (and (>= distance tolerance)
+                            (>= distance hst-mode--hard-minimum-distance-to-nth-previous-location)))
+                     (push-mark this-point t nil))))))
            
            ;; Dynamically sets the tolerance proportional to the number of places in MARK-RING over the total number of points in the buffer.
            ;; TOLERANCE is how close two /recent/ history locations can be to each other, measured in points.
@@ -124,10 +128,7 @@
 		;; remember this position in case of a forthcoming consecutive call
 		(setq last-pos-idx dest-history-idx)
 
-		;; (message "idx=%s, history=%s"
-		;;		 dest-history-idx history) ;; shit test
-
-		;; navigation bar
+	    ;; navigation bar
 		;; shows where you are (in temporal terms of undo history) while scrolling
 		(let ((message-log-max nil)
 			  (minibuffer-message-timeout 0)
