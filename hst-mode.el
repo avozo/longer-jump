@@ -77,7 +77,7 @@
 (make-variable-buffer-local
  (defvar hst-mode--timer))
 
-(cl-defun start-recording-points (target-buffer)
+q(cl-defun start-recording-points (target-buffer)
   (if (and (null hst-mode) (timerp hst-mode--timer))
       ;; Discard this timer if HST-MODE is disabled
       (cancel-timer hst-mode--timer)
@@ -101,12 +101,24 @@
                     ((let ((distance (abs (- this-point
                                              (marker-position (elt mark-ring (min (1- (length mark-ring)) hst-mode--n-locations-in-history-before-repeat)))))))
                        (and (>= distance tolerance)
-                            (>= distance hst-mode--hard-minimum-distance-to-nth-previous-location)))
-                     (push-mark this-point t nil))))))
+                            
+                            ;; Still ensure that the point is no closer than a predefined static minimum distance; avoiding points too close when the TOLERANCE is too small (i.e., TOLERANCE is set dynamically based on the buffer size).
+                            (>= distance hst-mode--hard-minimum-distance-to-nth-previous-location)
+                            )
+                       )
+                     ;; Get rid of all the very recent points which are further away from THIS-POINT than TOLERANCE.
+                     (progn
+                       (dotimes (i (min (length mark-ring) hst-mode--n-locations-in-history-before-repeat))
+                         (when (< tolerance
+                                  (abs (- this-point
+                                          (marker-position (elt mark-ring i)))))
+                           (pop-mark)))
+                       ;; Record THIS-POINT.
+                       (push-mark this-point t nil)))))))
            
            ;; Dynamically sets the tolerance proportional to the number of places in MARK-RING over the total number of points in the buffer.
            ;; TOLERANCE is how close two /recent/ history locations can be to each other, measured in points.
-           (/ mark-ring-max
+           (/ mark-ring-max ;; global Emacs-wide variable
               (point-max))
            
            target-buffer))))
