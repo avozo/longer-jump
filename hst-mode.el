@@ -77,7 +77,7 @@
 (make-variable-buffer-local
  (defvar hst-mode--timer))
 
-q(cl-defun start-recording-points (target-buffer)
+(cl-defun start-recording-points (target-buffer)
   (if (and (null hst-mode) (timerp hst-mode--timer))
       ;; Discard this timer if HST-MODE is disabled
       (cancel-timer hst-mode--timer)
