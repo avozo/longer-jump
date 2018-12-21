@@ -106,13 +106,14 @@
                             (>= distance hst-mode--hard-minimum-distance-to-nth-previous-location)
                             )
                        )
-                     ;; Get rid of all the very recent points which are further away from THIS-POINT than TOLERANCE.
+                     ;; Prunes very recent history points closer to THIS-POINT than TOLERANCE, going backwards chronologically. Stop once a history point is detected at or beyond our TOLERANCE distance; this probably marks a meaningful change in cursor position.
                      (progn
-                       (dotimes (i (min (length mark-ring) hst-mode--n-locations-in-history-before-repeat))
-                         (when (< tolerance
-                                  (abs (- this-point
-                                          (marker-position (elt mark-ring i)))))
-                           (pop-mark)))
+                       (loop for i from 0 below (min (length mark-ring) hst-mode--n-locations-in-history-before-repeat)
+                             ;; Only prunes at most the most recent HST-MODE--N-LOCATIONS-IN-HISTORY-BEFORE-REPEAT history entries.
+                             until (< tolerance
+                                      (abs (- this-point
+                                              (marker-position (elt mark-ring i)))))
+                             do (pop-mark))
                        ;; Record THIS-POINT.
                        (push-mark this-point t nil)))))))
            
