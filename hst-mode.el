@@ -1,5 +1,5 @@
 ;;; package --- Summary:
-;;; longer-jump.el --- Go back to last relevant cursor position
+;;; hst-mode.el --- Go back to last relevant cursor position
 ;;; 
 ;;; Author: Zelly Snyder <zelly@outlook.com>
 ;;; 
@@ -44,8 +44,9 @@
   (/ mark-ring-max 4)
   "Number of most recent history locations to ensure are far away from the current point so as to prevent clumping of history locations.")
 
-(defcustom hst-mode--hard-minimum-distance-to-nth-previous-location 40
+(defcustom hst-mode--hard-minimum-distance-to-nth-previous-location (* 80 10)
   "Absolute minimum distance that must separate a new candidate history location from the Nth previous location, as defined by HST-MODE--N-LOCATIONS-IN-HISTORY-BEFORE-REPEAT")
+;; s
 
 (defcustom interval-in-seconds-to-find-new-locations 1.0
   "How many idle seconds to wait before inspecting the buffer to calculate new locations")
