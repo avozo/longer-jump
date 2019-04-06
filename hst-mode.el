@@ -171,5 +171,10 @@
       (hst-mode--register-listener)
     (hst-mode--unregister-listener)))
 
+(define-globalized-minor-mode global-hst-mode hst-mode
+  (lambda ()
+    (unless (memq 'hst-mode minor-mode-list)
+      (hst-mode 1))))
+
 (provide 'hst-mode)
 ;;; hst-mode.el ends here
