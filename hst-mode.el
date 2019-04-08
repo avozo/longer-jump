@@ -28,6 +28,7 @@
   :group 'hst)
 
 ;; constants
+;; configurable
 
 (defcustom hst-mode--unvisited-point-character "-"
   "Character to display as an empty space in the navigation progress bar."
@@ -46,7 +47,7 @@
   :type 'number
   :group 'hst)
 
-(defcustom hst-mode-threshold-lines-moved 4
+(defcustom hst-mode-threshold-lines-moved 2
   "Minimum line number distance before a new history entry is added."
   :type 'number
   :group 'hst)
@@ -66,22 +67,25 @@
 
 ;; logging history
 
-(make-variable-buffer-local (defvar hst-mode--navigation-idx 0))
+(defvar hst-mode--navigation-idx 0)
+(make-variable-buffer-local 'hst-mode--navigation-idx)
 
-(make-variable-buffer-local (defvar hst-mode--ring (make-ring hst-mode-max-history-entries)))
+(defvar hst-mode--ring (make-ring hst-mode-max-history-entries))
+(make-variable-buffer-local 'hst-mode--ring)
 
 (defun hst-mode--push (&optional marker)
   (interactive)
   (ring-insert hst-mode--ring (or marker (point-marker))))
 
 (defun hst-mode--justifies-new-entry (candidate-position)
-  "Determine whether some new position should be pushed onto the history ring"
-  (let* ((newest-entry (ring-ref hst-mode--ring 0))
-         (newest-entry-pos (marker-position newest-entry))
-         (newest-entry-line-number (hst-mode--what-line-is-this newest-entry-pos))
-         (candidate-line-number (hst-mode--what-line-is-this candidate-position)))
-    (>= (abs (- newest-entry-line-number candidate-line-number))
-        hst-mode-threshold-lines-moved)))
+  "Determine whether some new position should be pushed onto the history ring."
+  (or (ring-empty-p hst-mode--ring)
+      (let* ((newest-entry (ring-ref hst-mode--ring 0))
+             (newest-entry-pos (marker-position newest-entry))
+             (newest-entry-line-number (hst-mode--what-line-is-this newest-entry-pos))
+             (candidate-line-number (hst-mode--what-line-is-this candidate-position)))
+        (>= (abs (- newest-entry-line-number candidate-line-number))
+            hst-mode-threshold-lines-moved))))
 
 (defun hst-mode--run-check ()
   "Add current position to history if it's a good idea."
@@ -94,9 +98,12 @@
       (hst-mode--currently-mid-navigation-p)
       ;; short circuit if the cursor is jumping as a result of repeated (possibly programmatic) navigation; check the last few commands
       (hst-mode--list-all-equal-p
-       (mapcar #'first
-               (cl-subseq command-history 0
-                          (min (length command-history) 3)))))
+       (mapcar
+        #'first
+        (cl-subseq
+         command-history
+         0
+         (min (length command-history) 3)))))
      (unless (or (ring-empty-p hst-mode--ring)
                  (hst-mode--justifies-new-entry pos))
        ;; Replace the newest entry when we shouldn't add a new one de novo.
@@ -105,9 +112,9 @@
      (hst-mode--push))))
 
 (defun hst-mode--register-listener ()
-  "Starts checking for new history positions by hooking into editor commands"
+  "Starts checking for new history positions by hooking into editor commands."
   (interactive)
-  (add-hook 'post-command-hook #'hst-mode--run-check nil t))
+  (add-hook 'post-command-hook #'hst-mode--run-check t t))
 
 (defun hst-mode--unregister-listener ()
   "Stop checking for new history positions; useful for debugging this package."
@@ -115,36 +122,37 @@
   (remove-hook 'post-command-hook #'hst-mode--run-check t))
 
 (defun hst-mode--navigate (delta)
-  "Traverse the history ring."
-  (setq hst-mode--navigation-idx (if (hst-mode--currently-mid-navigation-p)
-                          (+ delta hst-mode--navigation-idx)
-                        delta))
-  (let ((dest (marker-position
-               (ring-ref hst-mode--ring (min hst-mode--navigation-idx (ring-length hst-mode--ring)))))
-        (mod-idx (mod hst-mode--navigation-idx (ring-length hst-mode--ring))))
-    (goto-char dest)
-    ;; make the destination line the center line on the screen
-    (recenter nil)
-    ;; show a nice visual indicator; pulse animation on the line
-    (pulse-momentary-highlight-one-line dest)
-    ;; display a bar in minibuffer; orient yourself on where you are in your history as you are navigating through it
-    (message "Navigation History %s"
-             (concat
-              (propertize "["
-                          'face '(:family "Monospace")
-                          'face '(:weight 'ultra-bold))
-              (propertize (loop repeat (- (ring-length hst-mode--ring)
-                                          mod-idx)
-                                concat hst-mode--visited-point-character)
-                          'face '(:family "Monospace")
-                          'face '(:weight 'ultra-bold))
-              (propertize (loop repeat mod-idx
-                                concat hst-mode--unvisited-point-character)
-                          'face '(:family "Monospace")
-                          'face '(:weight 'ultra-light))
-              (propertize "]"
-                          'face '(:family "Monospace")
-                          'face '(:weight 'ultra-bold))))))
+  "Traverse the history ring by indexing into the history ring by an offset DELTA."
+  (unless (ring-empty-p hst-mode--ring)
+    (setq hst-mode--navigation-idx (if (hst-mode--currently-mid-navigation-p)
+                                       (+ delta hst-mode--navigation-idx)
+                                     delta))
+    (let ((dest (marker-position
+                 (ring-ref hst-mode--ring (min hst-mode--navigation-idx (ring-length hst-mode--ring)))))
+          (mod-idx (mod hst-mode--navigation-idx (ring-length hst-mode--ring))))
+      (goto-char dest)
+      ;; make the destination line the center line on the screen
+      (recenter nil)
+      ;; show a nice visual indicator; pulse animation on the line
+      (pulse-momentary-highlight-one-line dest)
+      ;; display a bar in minibuffer; orient yourself on where you are in your history as you are navigating through it
+      (message "Navigation History %s"
+               (concat
+                (propertize "["
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
+                (propertize (loop repeat (- (ring-length hst-mode--ring)
+                                            mod-idx)
+                                  concat hst-mode--visited-point-character)
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
+                (propertize (loop repeat mod-idx
+                                  concat hst-mode--unvisited-point-character)
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-light))
+                (propertize "]"
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold)))))))
 
 (defun hst-mode--currently-mid-navigation-p ()
   "Are you in the middle of traversing the history?"
@@ -164,6 +172,7 @@
 
 (defvar hst-mode-map
   (let ((m (make-sparse-keymap)))
+    ;; use the Command/Windows/Super key by default
     (define-key m (kbd "s-[") #'hst-mode--go-back)
     (define-key m (kbd "s-]") #'hst-mode--go-forward)
     m))
@@ -173,9 +182,9 @@
   :lighter "hst"
   :keymap hst-mode-map
   :group 'hst
-  (if (boundp 'hst-mode)
-      (hst-mode--register-listener)
-    (hst-mode--unregister-listener)))
+  (if (member #'hst-mode--run-check post-command-hook)
+      (hst-mode--unregister-listener)
+    (hst-mode--register-listener)))
 
 (provide 'hst-mode)
 ;;; hst-mode.el ends here
