@@ -52,16 +52,21 @@
   :type 'number
   :group 'hst)
 
+(defcustom hst-mode-use-multiple-buffers nil
+  "Set this to T if you want to be able to go back and forth to different buffers; NIL makes your history local to each buffer."
+  :type 'boolean
+  :group 'hst)
+
 ;; utils
 
 (defun hst-mode--what-line-is-this (pos)
-  "Gives the line number corresponding to a position"
+  "Gives the line number corresponding to a position POS."
   (save-excursion
     (beginning-of-line)
     (1+ (count-lines 1 pos))))
 
 (defun hst-mode--list-all-equal-p (lst)
-  "Returns T for all lists with identical members."
+  "Return T for a list LST with identical members."
   (unless (null lst)
     (= (length lst) (cl-count (first lst) lst))))
 
@@ -72,11 +77,11 @@
 (defvar-local hst-mode--ring (make-ring hst-mode-max-history-entries))
 
 (defun hst-mode--push (&optional marker)
-  (interactive)
+  "Push a MARKER onto the history ring."
   (ring-insert hst-mode--ring (or marker (point-marker))))
 
 (defun hst-mode--justifies-new-entry (candidate-position)
-  "Determine whether some new position should be pushed onto the history ring."
+  "Determine whether some new position CANDIDATE-POSITION should be pushed onto the history ring."
   (or (ring-empty-p hst-mode--ring)
       (let* ((newest-entry (ring-ref hst-mode--ring 0))
              (newest-entry-pos (marker-position newest-entry))
@@ -110,14 +115,24 @@
      (hst-mode--push))))
 
 (defun hst-mode--register-listener ()
-  "Starts checking for new history positions by hooking into editor commands."
+  "Start checking for new history positions by hooking into editor commands."
   (interactive)
-  (add-hook 'post-command-hook #'hst-mode--run-check t t))
+  (add-hook 'post-command-hook #'hst-mode--run-check t t)
+  (make-local-variable 'hst-mode--ring)
+  (setq hst-mode--ring (make-ring hst-mode-max-history-entries))
+  (make-local-variable 'hst-mode--navigation-idx)
+  (setq hst-mode--navigation-idx 0))
 
 (defun hst-mode--unregister-listener ()
   "Stop checking for new history positions; useful for debugging this package."
   (interactive)
   (remove-hook 'post-command-hook #'hst-mode--run-check t))
+
+(defun hst-mode--goto-mark (marker)
+  "Go to a MARKER, maybe even if it's in another buffer, if you set a customization variable."
+  (when hst-mode-use-multiple-buffers
+    (set-buffer (marker-buffer marker)))
+  (goto-char (marker-position marker)))
 
 (defun hst-mode--navigate (delta)
   "Traverse the history ring by indexing into the history ring by an offset DELTA."
@@ -125,14 +140,15 @@
     (setq hst-mode--navigation-idx (if (hst-mode--currently-mid-navigation-p)
                                        (+ delta hst-mode--navigation-idx)
                                      delta))
-    (let ((dest (marker-position
-                 (ring-ref hst-mode--ring (min hst-mode--navigation-idx (ring-length hst-mode--ring)))))
+    (let* ((dest-marker (ring-ref hst-mode--ring
+                                  hst-mode--navigation-idx))
+          (dest-pos (marker-position dest-marker))
           (mod-idx (mod hst-mode--navigation-idx (ring-length hst-mode--ring))))
-      (goto-char dest)
+      (hst-mode--goto-mark dest-marker)
       ;; make the destination line the center line on the screen
       (recenter nil)
       ;; show a nice visual indicator; pulse animation on the line
-      (pulse-momentary-highlight-one-line dest)
+      (pulse-momentary-highlight-one-line dest-pos)
       ;; display a bar in minibuffer; orient yourself on where you are in your history as you are navigating through it
       (message "Navigation History %s"
                (concat
