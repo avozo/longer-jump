@@ -67,11 +67,9 @@
 
 ;; logging history
 
-(defvar hst-mode--navigation-idx 0)
-(make-variable-buffer-local 'hst-mode--navigation-idx)
+(defvar-local hst-mode--navigation-idx 0)
 
-(defvar hst-mode--ring (make-ring hst-mode-max-history-entries))
-(make-variable-buffer-local 'hst-mode--ring)
+(defvar-local hst-mode--ring (make-ring hst-mode-max-history-entries))
 
 (defun hst-mode--push (&optional marker)
   (interactive)
