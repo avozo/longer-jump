@@ -77,7 +77,7 @@
 (make-variable-buffer-local
  (defvar hst-mode--timer))
 
-(cl-defun start-recording-points (target-buffer)
+(cl-defun hst-mode--start-recording-points (target-buffer)
   (if (and (null hst-mode) (timerp hst-mode--timer))
       ;; Discard this timer if HST-MODE is disabled
       (cancel-timer hst-mode--timer)
@@ -124,7 +124,7 @@
            
            target-buffer))))
 
-(defun history-move (delta)
+(defun hst-mode--history-move (delta)
   "delta > 0 => go forward in time"
   (interactive)
   (let ((history (mapcar #'marker-position mark-ring)))
@@ -171,29 +171,22 @@
         (recenter nil))))
   )
 
-(defun history-forward ()
+(defun hst-mode--history-forward ()
+  "Move forward to the next history location; chronologically to the more recent location after the current one."
   (interactive)
-  (history-move 1)
+  (hst-mode--history-move 1)
   )
 
-(defun history-back ()
+(defun hst-mode--history-back ()
+  "Move backward to the previous history location; chronologically to the Nth older history location"
   (interactive)
-  (history-move -1)
+  (hst-mode--history-move -1)
   )
-
-;; (defvar hst-mode-map
-;;   (let ((m (make-sparse-keymap)))
-;;     (define-key m [prior] #'history-back)
-;;     (define-key m [next] #'history-forward)
-;;     (global-set-key (kbd "s-\\") #'(lambda ()
-;;                                      (interactive)
-;;                                      (hst-mode -1))))
-;;     m)
 
 (defvar hst-mode-map
   (let ((m (make-sparse-keymap)))
-    (define-key m (kbd "s-[") #'history-back)
-    (define-key m (kbd "s-]") #'history-forward)
+    (define-key m (kbd "s-[") #'hst-mode--history-back)
+    (define-key m (kbd "s-]") #'hst-mode--history-forward)
     m))
 
 ;;;###autoload
@@ -201,7 +194,7 @@
   :lighter "hst "
   :keymap hst-mode-map
   :group 'hst
-  (start-recording-points (current-buffer))
+  (hst-mode--start-recording-points (current-buffer))
   )
 
 (provide 'hst-mode)
