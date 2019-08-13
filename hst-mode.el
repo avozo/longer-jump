@@ -1,5 +1,5 @@
 ;;; package --- Summary:
-;;; longer-jump.el --- Go back to last relevant cursor position
+;;; hst-mode.el --- Go back to last relevant cursor position
 ;;; 
 ;;; Author: Zelly Snyder <zelly@outlook.com>
 ;;; 
@@ -20,182 +20,185 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
+(require 'cl)
+(require 'ring)
 
 (defgroup hst nil
-  "Navigate through recent cursor positions in a buffer"
+  "Navigate through recent cursor positions in each buffer."
   :group 'hst)
 
 ;; constants
+;; configurable
 
-(defcustom unvisited-point-character "-"
-  "Character to display as an empty space in the navigation progress bar"
+(defcustom hst-mode--unvisited-point-character "-"
+  "Character to display as an empty space in the navigation progress bar."
   :type 'string
   :options '(" " "-")
   :group 'hst)
 
-(defcustom visited-point-character "+"
-  "Character to display in the navigation/progress bar to represent points preceding the current location's point"
+(defcustom hst-mode--visited-point-character "+"
+  "Character to display in the navigation/progress bar to represent points preceding the current location's point."
   :type 'string
   :options '(" " "+")
   :group 'hst)
 
-(defvar hst-mode--n-locations-in-history-before-repeat
-  (/ mark-ring-max 4)
-  "Number of most recent history locations to ensure are far away from the current point so as to prevent clumping of history locations.")
+(defcustom hst-mode-max-history-entries 16
+  "Maximum number of locations per buffer that you want to be able to go back or go forward to."
+  :type 'number
+  :group 'hst)
 
-(defcustom hst-mode--hard-minimum-distance-to-nth-previous-location 40
-  "Absolute minimum distance that must separate a new candidate history location from the Nth previous location, as defined by HST-MODE--N-LOCATIONS-IN-HISTORY-BEFORE-REPEAT")
+(defcustom hst-mode-threshold-lines-moved 2
+  "Minimum line number distance before a new history entry is added."
+  :type 'number
+  :group 'hst)
 
-(defcustom interval-in-seconds-to-find-new-locations 1.0
-  "How many idle seconds to wait before inspecting the buffer to calculate new locations")
+(defcustom hst-mode-use-multiple-buffers nil
+  "Set this to T if you want to be able to go back and forth to different buffers; NIL makes your history local to each buffer."
+  :type 'boolean
+  :group 'hst)
 
 ;; utils
 
-(defun cyclize (n seq)
-  "Negative or too large index -> correct index. Makes an 'index' valid over (-inf, +inf). This corrects N without actually calling ELT."
-  (mod n (length seq)))
+(defun hst-mode--what-line-is-this (pos)
+  "Gives the line number corresponding to a position POS."
+  (save-excursion
+    (beginning-of-line)
+    (1+ (count-lines 1 pos))))
 
-(defun push-into-queue (v x max-len)
-  "cons X to list V as a FIFO queue; keeps len(V) <= MAX-LEN"
-  (let ((ret (cons x v)))
-	(if (> (length ret) max-len)
-		(cl-subseq ret 0 max-len)
-	  ret)))
+(defun hst-mode--list-all-equal-p (lst)
+  "Return T for a list LST with identical members."
+  (unless (null lst)
+    (= (length lst) (cl-count (first lst) lst))))
 
 ;; logging history
 
-(make-variable-buffer-local
- (defvar last-pos-idx 0)
- )
+(defvar-local hst-mode--navigation-idx 0)
 
-(defun currently-stepping-over-locations-p ()
-  (or (eq last-command #'history-back)
-	  (eq last-command #'history-forward)
-	  (eq last-command #'history-move)))
+(defvar-local hst-mode--ring (make-ring hst-mode-max-history-entries))
 
-(make-variable-buffer-local
- (defvar hst-mode--timer))
+(defun hst-mode--push (&optional marker)
+  "Push a MARKER onto the history ring."
+  (ring-insert hst-mode--ring (or marker (point-marker))))
 
-(cl-defun hst-mode--start-recording-points (target-buffer)
-  (if (and (null hst-mode) (timerp hst-mode--timer))
-      ;; Discard this timer if HST-MODE is disabled
-      (cancel-timer hst-mode--timer)
-    (setq hst-mode--timer
-          (run-with-idle-timer
-           interval-in-seconds-to-find-new-locations t
-           #'(lambda (tolerance target-buffer)
-               (unless (or
-                        ;; make sure we're not interrupting while user is making a transient mark
-                        mark-active
-                        ;; don't record points while stepping over history
-                        (currently-stepping-over-locations-p))
-                 (let ((this-point (point)))
-                   (cond
-                    
-                    ;; immediately add THIS-POINT to the mark-ring if the mark-ring is empty
-                    ((zerop (length mark-ring))
-                     (push-mark this-point t nil))
-                    
-                    ;; only record when the oldest point that we want to check is further than TOLERANCE points away from THIS-POINT
-                    ((let ((distance (abs (- this-point
-                                             (marker-position (elt mark-ring (min (1- (length mark-ring)) hst-mode--n-locations-in-history-before-repeat)))))))
-                       (and (>= distance tolerance)
-                            
-                            ;; Still ensure that the point is no closer than a predefined static minimum distance; avoiding points too close when the TOLERANCE is too small (i.e., TOLERANCE is set dynamically based on the buffer size).
-                            (>= distance hst-mode--hard-minimum-distance-to-nth-previous-location)
-                            )
-                       )
-                     ;; Prunes very recent history points closer to THIS-POINT than TOLERANCE, going backwards chronologically. Stop once a history point is detected at or beyond our TOLERANCE distance; this probably marks a meaningful change in cursor position.
-                     (progn
-                       (loop for i from 0 below (min (length mark-ring) hst-mode--n-locations-in-history-before-repeat)
-                             ;; Only prunes at most the most recent HST-MODE--N-LOCATIONS-IN-HISTORY-BEFORE-REPEAT history entries.
-                             until (< tolerance
-                                      (abs (- this-point
-                                              (marker-position (elt mark-ring i)))))
-                             do (pop-mark))
-                       ;; Record THIS-POINT.
-                       (push-mark this-point t nil)))))))
-           
-           ;; Dynamically sets the tolerance proportional to the number of places in MARK-RING over the total number of points in the buffer.
-           ;; TOLERANCE is how close two /recent/ history locations can be to each other, measured in points.
-           (/ mark-ring-max ;; global Emacs-wide variable
-              (point-max))
-           
-           target-buffer))))
+(defun hst-mode--justifies-new-entry (candidate-position)
+  "Determine whether some new position CANDIDATE-POSITION should be pushed onto the history ring."
+  (or (ring-empty-p hst-mode--ring)
+      (let* ((newest-entry (ring-ref hst-mode--ring 0))
+             (newest-entry-pos (marker-position newest-entry))
+             (newest-entry-line-number (hst-mode--what-line-is-this newest-entry-pos))
+             (candidate-line-number (hst-mode--what-line-is-this candidate-position)))
+        (>= (abs (- newest-entry-line-number candidate-line-number))
+            hst-mode-threshold-lines-moved))))
 
-(defun hst-mode--history-move (delta)
-  "delta > 0 => go forward in time"
+(defun hst-mode--run-check ()
+  "Add current position to history if it's a good idea."
+  (let ((pos (point)))
+    (unless
+     (or
+      ;; do nothing if the editor hasn't loaded yet
+      (null pos)
+      ;; short circuit if we jumped by traversing history
+      (hst-mode--currently-mid-navigation-p)
+      ;; short circuit if the cursor is jumping as a result of repeated (possibly programmatic) navigation; check the last few commands
+      (hst-mode--list-all-equal-p
+       (mapcar
+        #'first
+        (cl-subseq
+         command-history
+         0
+         (min (length command-history) 3)))))
+     (unless (or (ring-empty-p hst-mode--ring)
+                 (hst-mode--justifies-new-entry pos))
+       ;; Replace the newest entry when we shouldn't add a new one de novo.
+       ;; That way we go back to the area we remember the most (the last place we were working on). So we only actually record the places we /jumped/ to.
+       (ring-remove hst-mode--ring 0))
+     (hst-mode--push))))
+
+(defun hst-mode--register-listener ()
+  "Start checking for new history positions by hooking into editor commands."
   (interactive)
-  (let ((history (mapcar #'marker-position mark-ring)))
-		 ;;(history (subseq history 0 (min (length history) +max-history-items+)))
-	(if (zerop (length history))
-		(message (format "Nowhere to go %s to. Start editing!"
-						 (if (< delta 0) "back" "forward")))
-	  (let ((dest-history-idx (if (currently-stepping-over-locations-p)
-								  ;; different behavior for calling this function consecutively
-								  (cyclize (- last-pos-idx delta) history)
-								;; 0 is the earliest edit position
-								0)))
+  (add-hook 'post-command-hook #'hst-mode--run-check t t)
+  (make-local-variable 'hst-mode--ring)
+  (setq hst-mode--ring (make-ring hst-mode-max-history-entries))
+  (make-local-variable 'hst-mode--navigation-idx)
+  (setq hst-mode--navigation-idx 0))
 
-		;; remember this position in case of a forthcoming consecutive call
-		(setq last-pos-idx dest-history-idx)
-
-	    ;; navigation bar
-		;; shows where you are (in temporal terms of undo history) while scrolling
-		(let ((message-log-max nil)
-			  (minibuffer-message-timeout 0)
-			  (enable-recursive-minibuffers nil))
-		  (message "In navigation history %s"
-				   (concat
-					(propertize "["
-								'face '(:family "Monospace")
-								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat (- (length history) dest-history-idx) concat visited-point-character)
-								'face '(:family "Monospace")
-								'face '(:weight 'ultra-bold))
-					(propertize (loop repeat dest-history-idx concat unvisited-point-character)
-								'face '(:family "Monospace")
-								'face '(:weight 'ultra-light))
-					(propertize "]"
-								'face '(:family "Monospace")
-								'face '(:weight 'ultra-bold))
-					)))
-
-		;; actually move the cursor
-		(let ((destination-char (elt history dest-history-idx)))
-          (goto-char destination-char)
-          ;; show a visual effect--highlight the line as a momentary flash
-          (pulse-momentary-highlight-one-line destination-char))
-        ;; also move window to middle of screen
-        (recenter nil))))
-  )
-
-(defun hst-mode--history-forward ()
-  "Move forward to the next history location; chronologically to the more recent location after the current one."
+(defun hst-mode--unregister-listener ()
+  "Stop checking for new history positions; useful for debugging this package."
   (interactive)
-  (hst-mode--history-move 1)
-  )
+  (remove-hook 'post-command-hook #'hst-mode--run-check t))
 
-(defun hst-mode--history-back ()
-  "Move backward to the previous history location; chronologically to the Nth older history location"
+(defun hst-mode--goto-mark (marker)
+  "Go to a MARKER, maybe even if it's in another buffer, if you set a customization variable."
+  (when hst-mode-use-multiple-buffers
+    (set-buffer (marker-buffer marker)))
+  (goto-char (marker-position marker)))
+
+(defun hst-mode--navigate (delta)
+  "Traverse the history ring by indexing into the history ring by an offset DELTA."
+  (unless (ring-empty-p hst-mode--ring)
+    (setq hst-mode--navigation-idx (if (hst-mode--currently-mid-navigation-p)
+                                       (+ delta hst-mode--navigation-idx)
+                                     delta))
+    (let* ((dest-marker (ring-ref hst-mode--ring
+                                  hst-mode--navigation-idx))
+          (dest-pos (marker-position dest-marker))
+          (mod-idx (mod hst-mode--navigation-idx (ring-length hst-mode--ring))))
+      (hst-mode--goto-mark dest-marker)
+      ;; make the destination line the center line on the screen
+      (recenter nil)
+      ;; show a nice visual indicator; pulse animation on the line
+      (pulse-momentary-highlight-one-line dest-pos)
+      ;; display a bar in minibuffer; orient yourself on where you are in your history as you are navigating through it
+      (message "Navigation History %s"
+               (concat
+                (propertize "["
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
+                (propertize (loop repeat (- (ring-length hst-mode--ring)
+                                            mod-idx)
+                                  concat hst-mode--visited-point-character)
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold))
+                (propertize (loop repeat mod-idx
+                                  concat hst-mode--unvisited-point-character)
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-light))
+                (propertize "]"
+                            'face '(:family "Monospace")
+                            'face '(:weight 'ultra-bold)))))))
+
+(defun hst-mode--currently-mid-navigation-p ()
+  "Are you in the middle of traversing the history?"
+  (member last-command '(hst-mode--go-back
+                         hst-mode--go-forward
+                         hst-mode--navigate)))
+
+(defun hst-mode--go-back ()
+  "Go to previous location in history; go to the next oldest location."
   (interactive)
-  (hst-mode--history-move -1)
-  )
+  (hst-mode--navigate 1))
+
+(defun hst-mode--go-forward ()
+  "Go to the next newest location in history."
+  (interactive)
+  (hst-mode--navigate -1))
 
 (defvar hst-mode-map
   (let ((m (make-sparse-keymap)))
-    (define-key m (kbd "s-[") #'hst-mode--history-back)
-    (define-key m (kbd "s-]") #'hst-mode--history-forward)
+    ;; use the Command/Windows/Super key by default
+    (define-key m (kbd "s-[") #'hst-mode--go-back)
+    (define-key m (kbd "s-]") #'hst-mode--go-forward)
     m))
 
 ;;;###autoload
 (define-minor-mode hst-mode "hst-mode" t
-  :lighter "hst "
+  :lighter "hst"
   :keymap hst-mode-map
   :group 'hst
-  (hst-mode--start-recording-points (current-buffer))
-  )
+  (if (member #'hst-mode--run-check post-command-hook)
+      (hst-mode--unregister-listener)
+    (hst-mode--register-listener)))
 
 (provide 'hst-mode)
 ;;; hst-mode.el ends here

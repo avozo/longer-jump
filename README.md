@@ -1,30 +1,21 @@
-# hst-mode
+# hst-mode --- Go back to last cursor positions in Emacs
 
-A workable solution to "going back" in Emacs. All IDEs (and even Vim)
-have ways to go back to the last "place" (cursor position) you were
+A workable solution to ``going back'' in Emacs. All IDEs (and even Vim/evil)
+have ways to go back to the last ``place'' (cursor position) you were
 at.
 
-It records your cursor positions over time. When you haven't moved
-much from a particular area, that is considered a place and is added
-to the mark ring. This method is a major simplification over the
-methods used by the previous commits, but I'm still tweaking it every
-now and then because I really use this everyday.
-
-This only works for the local bufffer. You can't skip to your last
-place in another indeterminate buffer. Good.
-
-There are no third party dependencies.
+This only works for the local bufffer. You won't jump around to different buffers, windows, and frames by hitting the back button.
 
 ## Installation
 
-Just put hst-mode.el into your LOAD-PATH; e.g.:
+Just put ``hst-mode.el`` into your LOAD-PATH; e.g.:
 
 ```
-$ curl https://github.com/buysilver/longer-jump/blob/master/hst-mode.el > ~/.emacs.d/lisp/hst-mode.el
+$ curl https://github.com/hackharmony/longer-jump/blob/master/hst-mode.el > ~/.emacs.d/lisp/hst-mode.el
 ```
 
 
-in your `~/.emacs`:
+Then add this to your ``~/.emacs``:
 
 
 ```lisp
@@ -35,25 +26,26 @@ in your `~/.emacs`:
 (global-hst-mode 1)
 
 ;; otherwise you need to do M-x hst-mode on a per-buffer basis or something like…
-(add-hook 'text-mode-hook #'hst-mode)
+(add-hook 'text-mode-hook #'hst-mode) ;; track history when writing text
+(add-hook 'prog-mode'hook #'hst-mode) ;; track history when writing code
 ```
 
 ## Usage
 
 ``M-x hst-mode`` in a buffer you want to use this in.
 
-Use F9 to move back in your history, F12 to move forward. To remap these keys:
+Default keybindings are ``⌘-[`` to go back in history and ``⌘-]`` to go forward. Change them like this:
 
 ```lisp
-(define-key hst-map (kbd "C-}") 'hst-forward)
+(define-key hst-map (kbd "C-}") #'hst-mode--go-forward)
 ;                   ^^^^^^^^^^^ or anything you want
-(define-key hst-map (kbd "C-{") 'hst-back)
+(define-key hst-map (kbd "C-{") 'hst-mode--go-back)
 ;                   ^^^^^^^^^^^ or anything you want
 ```
 
-To change the number of positions that are remembered, change the max size of your mark ring. As of Emacs 25, it is 16 by default; that is, the last 16 spots will be remembered.
+## Customizations
 
-```lisp
-(setq-default mark-ring-max 5) ;; or whatever
-(setq-default global-mark-ring-max 5)
-```
+A number of things can be customized. ``M-x customize-group hst`` to see the full list.
+
+* ``hst-mode-max-history-entries`` --- How many entries you want to be remembered
+* ``hst-mode-threshold-lines-moved`` --- How many lines you need to approximately move before a new history entry is registered
