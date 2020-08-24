@@ -20,6 +20,10 @@
 
 ;;; Code:
 
+;; For inspiration:
+;; https://github.com/microsoft/vscode/blob/master/src/vs/workbench/services/history/browser/history.ts
+;; VSCode's implementation of go back/forward
+
 (require 'cl)
 (require 'ring)
 
@@ -80,6 +84,61 @@
   "Push a MARKER onto the history ring."
   (ring-insert hst-mode--ring (or marker (point-marker))))
 
+
+;; clustering
+
+
+(defun hst-mode--k-means (sequence k)
+  (let* ((clusters (let ((l (make-list k '())))
+					 (dolist (observation sequence)
+					   (let ((random-cluster-idx (random k)))
+						 (setf (elt l random-cluster-idx)
+							   (cons observation (elt l random-cluster-idx)))))
+					 l))
+		 (means (make-list k 0)))
+	(do ((equal-count 0 equal-count))
+		((equal equal-count
+				(count-if #'(lambda (x) (not (null x))) clusters))
+		 clusters)
+	  (message "%s" clusters)
+	  ;; calculate means
+	  (setq means (loop for c in clusters
+						collect (if (null c)
+									0
+								  (/ (apply #'+ c)
+									 (min 1 (length c))))))
+	  ;; assignment step
+	  (do ((observation sequence (cdr observation))
+		   (observation-idx 0 (1+ observation-idx)))
+		  ((null observation) t)
+	    (let ((closest-neighbor (car (cl-sort
+									  (loop for x in means and idx from 0
+											collect (list x idx))
+									  '<
+									  :key '(lambda (x)
+											  (cl-multiple-value-bind (mean i) x
+												(abs (- mean (car observation)))))))))
+		  (cl-multiple-value-bind (closest-neighbor-mean closest-neighbor-idx) closest-neighbor
+			(if (equal closest-neighbor-idx
+					   observation-idx)
+				(incf equal-count)
+			  (progn
+				(do ((cluster-idx 0 (1+ cluster-idx)))
+					((> cluster-idx (length clusters)))
+				  (dolist (item (elt clusters cluster-idx))
+					(when (equal item (car observation))
+					  (setf (elt clusters cluster-idx)
+							(remove item (elt clusters cluster-idx))))))
+				(setf (elt clusters (cadr closest-neighbor))
+					  (cons (car observation) (elt clusters closest-neighbor-idx)))))))))))
+
+;; try it out
+(hst-mode--k-means
+ (loop repeat 14
+	   collect (random 1000))
+ 3)
+
+
 (defun hst-mode--justifies-new-entry (candidate-position)
   "Determine whether some new position CANDIDATE-POSITION should be pushed onto the history ring."
   (or (ring-empty-p hst-mode--ring)
@@ -99,7 +158,9 @@
       (null pos)
       ;; short circuit if we jumped by traversing history
       (hst-mode--currently-mid-navigation-p)
-      ;; short circuit if the cursor is jumping as a result of repeated (possibly programmatic) navigation; check the last few commands
+      ;; short circuit if the cursor is jumping as a result of
+      ;; repeated (possibly programmatic) navigation; check the last
+      ;; few commands
       (hst-mode--list-all-equal-p
        (mapcar
         #'first
